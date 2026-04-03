@@ -24,7 +24,7 @@ Agendino is a web-based dashboard for managing, transcribing, and summarizing au
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/your-username/agendino.git
+    git clone https://github.com/DStt/agendino.git
    cd agendino
    ```
 

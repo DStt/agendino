@@ -1,1 +1,0 @@
-Add transcript full-text search box in modal.
