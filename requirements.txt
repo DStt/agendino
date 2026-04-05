@@ -8,3 +8,4 @@ chromadb
 icalendar
 recurring-ical-events
 mutagen
+faster-whisper

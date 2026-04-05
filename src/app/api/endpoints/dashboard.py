@@ -7,6 +7,7 @@ from models.dto.DeleteRecordingRequestDTO import DeleteRecordingRequestDTO
 from models.dto.GenerateTasksRequestDTO import GenerateTasksRequestDTO
 from models.dto.PublishRequestDTO import PublishRequestDTO
 from models.dto.SummarizeRequestDTO import SummarizeRequestDTO
+from models.dto.TranscribeRequestDTO import TranscribeRequestDTO
 from models.dto.UpdateRecordingRequestDTO import UpdateRecordingRequestDTO
 from models.dto.UpdateSummaryRequestDTO import UpdateSummaryRequestDTO
 from models.dto.UpdateTaskRequestDTO import UpdateTaskRequestDTO
@@ -50,9 +51,10 @@ async def get_audio(
 @router.post("/transcribe/{name}")
 async def transcribe_recording(
     name: str,
+    body: TranscribeRequestDTO = TranscribeRequestDTO(),
     dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
 ):
-    return dashboard_controller.transcribe_recording(name)
+    return dashboard_controller.transcribe_recording(name, engine=body.engine)
 
 
 @router.get("/transcript/{name}")

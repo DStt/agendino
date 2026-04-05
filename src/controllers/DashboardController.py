@@ -14,6 +14,7 @@ from repositories.SystemPromptsRepository import SystemPromptsRepository
 from services.SummarizationService import SummarizationService
 from services.TaskGenerationService import TaskGenerationService
 from services.TranscriptionService import TranscriptionService
+from services.WhisperTranscriptionService import WhisperTranscriptionService
 
 MIME_TYPES = {
     "hda": "audio/mpeg",
@@ -39,6 +40,7 @@ class DashboardController:
         system_prompts_repository: SystemPromptsRepository,
         template_path: str,
         publish_services: dict[str, object] | None = None,
+        whisper_transcription_service: WhisperTranscriptionService | None = None,
     ):
         self._sqlite_db_repository = sqlite_db_repository
         self._local_recordings_repository = local_recordings_repository
@@ -48,6 +50,7 @@ class DashboardController:
         self._system_prompts_repository = system_prompts_repository
         self._templates = Jinja2Templates(directory=template_path)
         self._publish_services: dict[str, object] = publish_services or {}
+        self._whisper_transcription_service = whisper_transcription_service
 
     @staticmethod
     def _bare_name(name: str) -> str:
@@ -307,7 +310,7 @@ class DashboardController:
                 return candidate, ext_dot.lstrip(".")
         return f"{bare_name}.hda", "hda"
 
-    def transcribe_recording(self, name: str) -> dict:
+    def transcribe_recording(self, name: str, engine: str = "gemini") -> dict:
         bare_name = self._bare_name(name)
         local_filename, file_ext = self._resolve_local_filename(bare_name)
 
@@ -320,8 +323,17 @@ class DashboardController:
 
         audio_path = self._local_recordings_repository.get_path(local_filename)
         mime_type = MIME_TYPES.get(file_ext, "audio/mpeg")
+
+        # Select transcription engine
+        if engine == "whisper":
+            if not self._whisper_transcription_service:
+                return {"ok": False, "error": "Whisper transcription service is not available"}
+            svc = self._whisper_transcription_service
+        else:
+            svc = self._transcription_service
+
         try:
-            transcript = self._transcription_service.transcribe(audio_path, mime_type=mime_type)
+            transcript = svc.transcribe(audio_path, mime_type=mime_type)
         except Exception as e:
             return {"ok": False, "error": f"Transcription failed: {str(e)}"}
 

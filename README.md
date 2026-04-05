@@ -1,12 +1,14 @@
 # Agendino
 
-Agendino is a web-based dashboard for managing, transcribing, and summarizing audio recordings from [HiDock](https://www.hidock.com/) USB devices. It connects directly to HiDock H1, H1E, and P1 devices over USB, syncs recordings locally, transcribes them using Google Gemini, generates structured AI summaries with customizable system prompts, and optionally publishes results to Notion.
+Agendino is a web-based dashboard for managing, transcribing, and summarizing audio recordings from [HiDock](https://www.hidock.com/) USB devices. It connects directly to HiDock H1, H1E, and P1 devices over USB, syncs recordings locally, transcribes them using Google Gemini or locally with Whisper, generates structured AI summaries with customizable system prompts, and optionally publishes results to Notion.
 
 ## Features
 
 - **HiDock USB Integration** — Detects and communicates with HiDock H1 / H1E / P1 devices over USB. List, download, and delete recordings directly from the device. View device info and storage usage.
 - **Local Recording Management** — Sync recordings from the device to local storage. Browse, play back, and manage `.hda` audio files from the web dashboard.
-- **AI Transcription** — Transcribe audio recordings using Google Gemini (`gemini-2.5-flash`). Automatic speaker diarization with timestamps and speaker labels.
+- **AI Transcription** — Two transcription engines available:
+  - **Gemini** (`gemini-2.5-flash`) — Cloud-based transcription with automatic speaker diarization, timestamps, and speaker labels.
+  - **Whisper** (local, via [faster-whisper](https://github.com/SYSTRAN/faster-whisper)) — Offline transcription running entirely on your machine. Best for long recordings where Gemini may truncate the output.
 - **AI Summarization** — Generate structured summaries (title, tags, and full markdown summary) from transcripts using Gemini. Choose from multiple system prompts organized by language and category (e.g. General, Meetings, Education, IT & Engineering).
 - **Notion Publishing** — Publish summaries as rich sub-pages under a Notion parent page, complete with metadata callouts, tags, and formatted markdown content.
 - **Recording Metadata** — Edit titles and tags for any recording. Track transcription and summarization status across device, local, and database records.
@@ -73,6 +75,14 @@ NOTION_PAGE_ID=your-notion-parent-page-id
 
 # Optional — SQLite database name (default: agendino.db)
 DATABASE_NAME=agendino.db
+
+# Optional — Local Whisper transcription settings
+# Model size: tiny, base, small (default), medium, large-v3
+WHISPER_MODEL_SIZE=small
+# Device: cpu (default) or cuda (requires NVIDIA GPU + CUDA toolkit)
+WHISPER_DEVICE=cpu
+# Compute type: auto (default), int8, float16, float32
+WHISPER_COMPUTE_TYPE=auto
 ```
 
 ## Getting Started
@@ -101,8 +111,10 @@ DATABASE_NAME=agendino.db
 ### Transcribing a Recording
 
 1. Select a recording that has been synced locally.
-2. Click **Transcribe** — the audio file is uploaded to Gemini and transcribed with speaker labels and timestamps.
-3. The transcript is saved to the database and can be viewed at any time.
+2. Click the **Transcribe** button (microphone icon) to transcribe with Gemini (default), or click the **dropdown arrow** next to it to choose between:
+   - **Gemini** — Cloud-based, includes speaker diarization and labels. May truncate very long recordings.
+   - **Whisper (local)** — Runs on your machine, no cloud upload. Handles long audio files without truncation. Requires downloading the model on first use (~500 MB for `small`).
+3. The transcript is saved to the database and can be viewed or edited at any time.
 
 ### Summarizing a Recording
 
@@ -205,6 +217,7 @@ agendino/
 │   ├── services/
 │   │   ├── HiDockDeviceService.py       # Device discovery
 │   │   ├── TranscriptionService.py      # Gemini transcription
+│   │   ├── WhisperTranscriptionService.py # Local Whisper transcription
 │   │   ├── SummarizationService.py      # Gemini summarization
 │   │   └── NotionService.py             # Notion API integration
 │   ├── static/                          # CSS & JS assets

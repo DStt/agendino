@@ -15,6 +15,7 @@ from services.RAGService import RAGService
 from services.SummarizationService import SummarizationService
 from services.TaskGenerationService import TaskGenerationService
 from services.TranscriptionService import TranscriptionService
+from services.WhisperTranscriptionService import WhisperTranscriptionService
 from services.DailyRecapService import DailyRecapService
 from services.ICalSyncService import ICalSyncService
 from services.ProactorService import ProactorService
@@ -51,6 +52,14 @@ def get_local_recordings_repository() -> LocalRecordingsRepository:
 
 def get_transcription_service() -> TranscriptionService:
     return TranscriptionService(api_key=os.getenv("GEMINI_API_KEY"))
+
+
+def get_whisper_transcription_service() -> WhisperTranscriptionService:
+    return WhisperTranscriptionService(
+        model_size=os.getenv("WHISPER_MODEL_SIZE", "small"),
+        device=os.getenv("WHISPER_DEVICE", "cpu"),
+        compute_type=os.getenv("WHISPER_COMPUTE_TYPE", "auto"),
+    )
 
 
 def get_summarization_service() -> SummarizationService:
@@ -102,6 +111,7 @@ def get_dashboard_controller() -> DashboardController:
         system_prompts_repository=get_system_prompts_repository(),
         template_path=os.path.join(get_root_path(), "src/templates/dashboard"),
         publish_services=_build_publish_services(),
+        whisper_transcription_service=get_whisper_transcription_service(),
     )
 
 

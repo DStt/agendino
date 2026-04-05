@@ -382,4 +382,9 @@
     --bs-btn-focus-shadow-rgb: 111, 66, 193;
 }
 
+/* Transcribe engine dropdown */
+.transcribe-engine-menu a:hover {
+    background: var(--bs-tertiary-bg);
+}
+
 

@@ -63,7 +63,14 @@ function actionButtons(rec) {
             }
             btns.push(`<button class="btn btn-sm btn-outline-warning btn-summarize" data-name="${rec.name}" title="Summarize"><i class="bi bi-stars"></i></button>`);
         } else {
-            btns.push(`<button class="btn btn-sm btn-outline-primary btn-transcribe" data-name="${rec.name}" title="Transcribe"><i class="bi bi-mic"></i></button>`);
+            btns.push(`<div class="btn-group btn-group-sm transcribe-split" style="position:relative">
+                <button class="btn btn-outline-primary btn-transcribe" data-name="${rec.name}" data-engine="gemini" title="Transcribe with Gemini"><i class="bi bi-mic"></i></button>
+                <button type="button" class="btn btn-outline-primary btn-transcribe-toggle" data-name="${rec.name}" title="Choose engine" style="padding-left:3px;padding-right:3px;border-left:0"><i class="bi bi-caret-down-fill" style="font-size:.55em"></i></button>
+                <div class="transcribe-engine-menu d-none" style="position:absolute;top:100%;right:0;z-index:1050;min-width:160px;background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:.375rem;box-shadow:0 .5rem 1rem rgba(0,0,0,.15);margin-top:2px">
+                    <a href="#" class="btn-transcribe-engine d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-body" data-name="${rec.name}" data-engine="gemini" style="font-size:.85rem"><i class="bi bi-cloud"></i> Gemini</a>
+                    <a href="#" class="btn-transcribe-engine d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-body" data-name="${rec.name}" data-engine="whisper" style="font-size:.85rem;border-top:1px solid var(--bs-border-color)"><i class="bi bi-pc-display"></i> Whisper (local)</a>
+                </div>
+            </div>`);
         }
     }
     if (rec.on_device || rec.on_local || rec.in_db) {
@@ -735,41 +742,86 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Transcribe button (delegate from table)
+    // Transcribe engine dropdown toggle
+    document.addEventListener("click", (e) => {
+        const toggleBtn = e.target.closest(".btn-transcribe-toggle");
+        if (toggleBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            // Close any other open menus first
+            document.querySelectorAll(".transcribe-engine-menu").forEach(m => m.classList.add("d-none"));
+            const menu = toggleBtn.parentElement.querySelector(".transcribe-engine-menu");
+            if (menu) menu.classList.toggle("d-none");
+            return;
+        }
+        // Close all open menus on outside click
+        document.querySelectorAll(".transcribe-engine-menu").forEach(m => m.classList.add("d-none"));
+    });
+
+    // Start transcription helper
+    async function startTranscription(name, engine, triggerBtn) {
+        const engineLabel = engine === "whisper" ? "Whisper (local)" : "Gemini AI";
+
+        if (triggerBtn) {
+            triggerBtn.disabled = true;
+            triggerBtn._origHTML = triggerBtn._origHTML || triggerBtn.innerHTML;
+            triggerBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+        }
+
+        openTranscriptModal(name);
+        modalLoading.querySelector("p").textContent = `Transcribing with ${engineLabel}… this may take a moment.`;
+
+        try {
+            const res = await fetch(`${TRANSCRIBE_URL}/${encodeURIComponent(name)}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ engine }),
+            });
+            const data = await res.json();
+
+            hide(modalLoading);
+            if (data.ok) {
+                showTranscriptPreview(data.transcript);
+                await loadDashboard();
+            } else {
+                modalError.textContent = data.error;
+                show(modalError);
+            }
+        } catch (err) {
+            hide(modalLoading);
+            modalError.textContent = `Transcription failed: ${err.message}`;
+            show(modalError);
+        } finally {
+            if (triggerBtn) {
+                triggerBtn.disabled = false;
+                triggerBtn.innerHTML = triggerBtn._origHTML;
+            }
+        }
+    }
+
+    // Transcribe button (main button — default engine) & engine menu item
     document.addEventListener("click", async (e) => {
+        // Engine menu item clicked
+        const engineItem = e.target.closest(".btn-transcribe-engine");
+        if (engineItem) {
+            e.preventDefault();
+            const name = engineItem.dataset.name;
+            const engine = engineItem.dataset.engine || "gemini";
+            // Close menu
+            document.querySelectorAll(".transcribe-engine-menu").forEach(m => m.classList.add("d-none"));
+            // Find the main button for spinner
+            const group = engineItem.closest(".transcribe-split");
+            const mainBtn = group ? group.querySelector(".btn-transcribe") : null;
+            await startTranscription(name, engine, mainBtn);
+            return;
+        }
+
         const transcribeBtn = e.target.closest(".btn-transcribe");
         if (transcribeBtn) {
             e.preventDefault();
             const name = transcribeBtn.dataset.name;
-
-            // Disable button and show spinner
-            transcribeBtn.disabled = true;
-            transcribeBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
-
-            openTranscriptModal(name);
-            modalLoading.querySelector("p").textContent = "Transcribing with Gemini AI… this may take a moment.";
-
-            try {
-                const res = await fetch(`${TRANSCRIBE_URL}/${encodeURIComponent(name)}`, { method: "POST" });
-                const data = await res.json();
-
-                hide(modalLoading);
-                if (data.ok) {
-                    showTranscriptPreview(data.transcript);
-                    // Refresh table to update button state
-                    await loadDashboard();
-                } else {
-                    modalError.textContent = data.error;
-                    show(modalError);
-                }
-            } catch (err) {
-                hide(modalLoading);
-                modalError.textContent = `Transcription failed: ${err.message}`;
-                show(modalError);
-            } finally {
-                transcribeBtn.disabled = false;
-                transcribeBtn.innerHTML = '<i class="bi bi-mic"></i>';
-            }
+            const engine = transcribeBtn.dataset.engine || "gemini";
+            await startTranscription(name, engine, transcribeBtn);
         }
 
         const viewBtn = e.target.closest(".btn-view-transcript");
