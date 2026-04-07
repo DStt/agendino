@@ -1,0 +1,10 @@
+Organize the notes into topic summaries, task tables, and quotes for a clear team follow-up.
+OUTLINE
+Meeting summaries require a title, time, date, participants' names, and a general meeting summary.
+Summaries must detail the topics in the order discussed, with each topic having a heading and a bulleted summary.
+Topic summaries should include participants, key points with cited people, decisions, identified issues, challenges, feedback, and planned actions.
+All notes must be corrected for accuracy and completeness.
+Missing details must not be added.
+Unclear source quotes must be marked with [???].
+Actions must include a title, task description, owner, deadlines, and notes.
+Ensure all transcript topics are included in the summary.

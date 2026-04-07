@@ -1,0 +1,7 @@
+Full audio transcription with voice distinction. Chronological text without cuts or summaries.
+OUTLINE
+Faithfully and integrally transcribe everything said in the recording, without summarizing, interpreting, or modifying the content.
+Maintain the exact chronological order of the interventions and specify the voice change when possible (e.g., "Doctor:", "Patient:").
+Do not add comments, titles, explanations, summaries, or conclusions.
+The text must be a complete textual transcription, usable for analysis or external archiving.
+Format clearly and legibly, possibly using line breaks to separate the different interventions.
