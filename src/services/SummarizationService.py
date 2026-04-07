@@ -23,8 +23,7 @@ You MUST respond with a valid JSON object with exactly these keys:
 }
 
 Return ONLY the JSON object, no other text before or after it.
-Use the language from the transcription to generate the summary, title, and tags.
-Do NOT translate it into another language.
+Use the language from the instruction not the transcript to generate the summary, title, and tags.
 """
 
 

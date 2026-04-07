@@ -1157,27 +1157,70 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            // Group prompts by category
-            const grouped = {};
-            for (const p of data.prompts) {
-                if (!grouped[p.category]) grouped[p.category] = [];
-                grouped[p.category].push(p);
-            }
+            const dataPrompts = data.prompts;
+            const langs = [...new Set(dataPrompts.map(p => p.language))];
+            
+            let html = `
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold">Language</label>
+                    <select class="form-select" id="prompt-lang-select">
+                        <option value="">Select language...</option>
+                        ${langs.map(l => `<option value="${l}">${l.toUpperCase()}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="mb-3 d-none" id="prompt-type-container">
+                    <label class="form-label text-muted small fw-bold">Type</label>
+                    <select class="form-select" id="prompt-type-select">
+                        <option value="">Select type...</option>
+                    </select>
+                </div>
+                <div class="mb-3 d-none" id="prompt-file-container">
+                    <label class="form-label text-muted small fw-bold">Prompt</label>
+                    <div id="prompt-buttons-container"></div>
+                </div>
+            `;
+            promptList.innerHTML = html;
+            show(promptList);
 
-            let html = '';
-            for (const [category, prompts] of Object.entries(grouped)) {
-                html += `<div class="prompt-category mb-3">`;
-                html += `<h6 class="text-muted text-uppercase small fw-bold mb-2"><i class="bi bi-folder2 me-1"></i>${category}</h6>`;
+            // Add event listeners
+            const langSelect = promptList.querySelector('#prompt-lang-select');
+            const typeContainer = promptList.querySelector('#prompt-type-container');
+            const typeSelect = promptList.querySelector('#prompt-type-select');
+            const fileContainer = promptList.querySelector('#prompt-file-container');
+            const btnContainer = promptList.querySelector('#prompt-buttons-container');
+
+            langSelect.addEventListener('change', () => {
+                const lang = langSelect.value;
+                if (!lang) {
+                    hide(typeContainer);
+                    hide(fileContainer);
+                    return;
+                }
+                const types = [...new Set(dataPrompts.filter(p => p.language === lang).map(p => p.category))];
+                typeSelect.innerHTML = `<option value="">Select type...</option>` + 
+                    types.map(t => `<option value="${t}">${t}</option>`).join('');
+                show(typeContainer);
+                hide(fileContainer);
+            });
+
+            typeSelect.addEventListener('change', () => {
+                const lang = langSelect.value;
+                const type = typeSelect.value;
+                if (!lang || !type) {
+                    hide(fileContainer);
+                    return;
+                }
+                const prompts = dataPrompts.filter(p => p.language === lang && p.category === type);
+                
+                let btns = '';
                 for (const p of prompts) {
-                    html += `<button class="btn btn-outline-secondary btn-sm me-2 mb-2 btn-select-prompt" data-prompt-id="${p.id}">
+                     btns += `<button class="btn btn-outline-secondary btn-sm me-2 mb-2 btn-select-prompt" data-prompt-id="${p.id}">
                         <i class="bi bi-file-earmark-text me-1"></i>${p.label.split(' / ')[1] || p.label}
                     </button>`;
                 }
-                html += `</div>`;
-            }
-
-            promptList.innerHTML = html;
-            show(promptList);
+                btnContainer.innerHTML = btns;
+                show(fileContainer);
+            });
         } catch (err) {
             hide(promptLoading);
             promptError.textContent = `Failed to load prompts: ${err.message}`;
