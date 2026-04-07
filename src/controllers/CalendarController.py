@@ -14,6 +14,7 @@ from services.ICalSyncService import ICalSyncService
 
 logger = logging.getLogger(__name__)
 
+
 class CalendarController:
     def __init__(
         self,
@@ -52,7 +53,7 @@ class CalendarController:
                     except Exception as e:
                         logger.warning("Failed to parse last_synced_at for calendar %s: %s", cal.id, e)
                         should_sync = True
-                        
+
                 if should_sync:
                     logger.info("Auto-syncing calendar: %s (ID: %s)", cal.name, cal.id)
                     try:

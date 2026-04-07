@@ -26,15 +26,13 @@ config = {}
 
 
 def get_config():
-    if config.get('init', False):
+    if config.get("init", False):
         return config
     items = os.environ.items()
     for item in items:
         config[item[0]] = item[1]
-    config['init'] = True
+    config["init"] = True
     return config
-
-
 
 
 def get_root_path() -> str:
@@ -105,7 +103,6 @@ def get_daily_recap_service() -> DailyRecapService:
 
 
 def get_dashboard_controller() -> DashboardController:
-    _config = get_config()
     return DashboardController(
         sqlite_db_repository=get_sqlite_db_repository(),
         local_recordings_repository=get_local_recordings_repository(),

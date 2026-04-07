@@ -66,7 +66,8 @@ class SqliteDBRepository:
         conn = self._connect()
         try:
             result = conn.execute(
-                "SELECT id, name, label, duration, file_extension, recorded_at, created_at, transcript FROM recording WHERE name = ?",
+                "SELECT id, name, label, duration, file_extension, recorded_at, created_at, transcript "
+                "FROM recording WHERE name = ?",
                 (name,),
             )
             row = result.fetchone()
@@ -100,7 +101,8 @@ class SqliteDBRepository:
         conn = self._connect()
         try:
             result = conn.execute(
-                "INSERT INTO recording (id, name, label, duration, file_extension, created_at, transcript) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO recording (id, name, label, duration, file_extension, created_at, transcript) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     db_recording.id,
                     db_recording.name,

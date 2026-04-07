@@ -9,7 +9,10 @@ logger = logging.getLogger(__name__)
 
 MAX_OUTPUT_TOKENS = 16384
 
-DAILY_RECAP_PROMPT = """You are a productivity assistant. Given a list of calendar events and meeting summaries for a specific day, generate a comprehensive daily recap.
+DAILY_RECAP_PROMPT = """\
+You are a productivity assistant. Given a list of calendar events
+and meeting summaries for a specific day, generate a comprehensive
+daily recap.
 
 Rules:
 1. Summarize the key activities, decisions, and outcomes of the day.

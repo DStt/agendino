@@ -1,16 +1,17 @@
-import os
 import json
 import logging
+
 from google import genai
 from google.genai import types
-
 from json_repair import repair_json
 
 logger = logging.getLogger(__name__)
 
 MAX_OUTPUT_TOKENS = 8192
 
-TASK_GENERATION_PROMPT = """You are a project management assistant. Given a meeting summary, generate actionable tasks that could be added to a Jira board.
+TASK_GENERATION_PROMPT = """\
+You are a project management assistant. Given a meeting summary, generate
+actionable tasks that could be added to a Jira board.
 
 Rules:
 1. Each task must have a clear, concise **title** (suitable as a Jira ticket title).

@@ -180,7 +180,6 @@ class DashboardController:
             "recordings": recordings,
         }
 
-
     def upload_recording(self, filename: str, file_data: bytes, label: str = "") -> dict:
         """Save an uploaded audio file locally and insert a DB record."""
         _, ext = os.path.splitext(filename)
@@ -266,7 +265,6 @@ class DashboardController:
         local_filename = f"{bare_name}.{file_ext}"
         results = []
         errors = []
-
 
         if delete_local:
             deleted = self._local_recordings_repository.delete(local_filename)

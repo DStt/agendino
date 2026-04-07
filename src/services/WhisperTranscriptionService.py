@@ -69,4 +69,3 @@ class WhisperTranscriptionService:
         m = int(seconds) // 60
         s = int(seconds) % 60
         return f"{m:02d}:{s:02d}"
-

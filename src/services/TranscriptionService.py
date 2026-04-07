@@ -12,9 +12,11 @@ Use the language spoken in the audio — do NOT translate.
 
 Rules:
 - Identify distinct speakers and label them as Speaker 1, Speaker 2, etc.
-- If a speaker's name is mentioned at any point, replace their generic label with that name throughout the entire transcript.
+- If a speaker's name is mentioned at any point, replace their generic
+  label with that name throughout the entire transcript.
 - Include a timestamp at the start of each new speaker turn in [MM:SS] format.
-- Remove filler sounds and hesitation noises (e.g. Mm, Mhm, Uh, Eh, Ah, Um) unless they carry clear communicative intent.
+- Remove filler sounds and hesitation noises (e.g. Mm, Mhm, Uh, Eh, Ah, Um)
+  unless they carry clear communicative intent.
 - Mark unclear or inaudible speech as [inaudible].
 - Use proper punctuation and paragraph breaks for readability.
 - Do not paraphrase, summarize, or omit content.

@@ -23,7 +23,6 @@ async def recordings_status(
     return dashboard_controller.get_recordings_status()
 
 
-
 @router.post("/upload")
 async def upload_recording(
     file: UploadFile = File(...),

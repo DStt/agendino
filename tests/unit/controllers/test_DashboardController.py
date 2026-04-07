@@ -346,8 +346,12 @@ class TestDashboardControllerAudioPath:
         mock_services["local_repo"].exists.return_value = True
         mock_services["local_repo"].get_path.return_value = "/path/to/file.hda"
         mock_services["sqlite_db"].get_recording_by_name.return_value = DBRecording(
-            id=1, name="test", label="Test", duration=10,
-            created_at=datetime.now(), file_extension="hda",
+            id=1,
+            name="test",
+            label="Test",
+            duration=10,
+            created_at=datetime.now(),
+            file_extension="hda",
         )
 
         path, ext = ctrl.get_audio_file_path("test")
@@ -367,8 +371,12 @@ class TestDashboardControllerAudioPath:
         mock_services["local_repo"].exists.return_value = True
         mock_services["local_repo"].get_path.return_value = "/path/to/file.mp3"
         mock_services["sqlite_db"].get_recording_by_name.return_value = DBRecording(
-            id=2, name="test", label="Test", duration=10,
-            created_at=datetime.now(), file_extension="mp3",
+            id=2,
+            name="test",
+            label="Test",
+            duration=10,
+            created_at=datetime.now(),
+            file_extension="mp3",
         )
 
         path, ext = ctrl.get_audio_file_path("test")
