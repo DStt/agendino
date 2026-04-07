@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timezone
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
@@ -10,6 +12,7 @@ from repositories.SqliteDBRepository import SqliteDBRepository
 from services.DailyRecapService import DailyRecapService
 from services.ICalSyncService import ICalSyncService
 
+logger = logging.getLogger(__name__)
 
 class CalendarController:
     def __init__(
@@ -27,7 +30,37 @@ class CalendarController:
     # ─── Web ──────────────────────────────────────────────────────
 
     def calendar_home(self, request: Request):
+        self._auto_sync_calendars()
         return self._templates.TemplateResponse(request=request, name="calendar.html")
+
+    def _auto_sync_calendars(self):
+        try:
+            calendars = self._sqlite_db_repository.get_shared_calendars()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            for cal in calendars:
+                if not cal.is_enabled:
+                    continue
+                should_sync = False
+                if not cal.last_synced_at:
+                    should_sync = True
+                else:
+                    try:
+                        last_synced = datetime.fromisoformat(cal.last_synced_at.replace(" ", "T"))
+                        minutes_since = (now - last_synced).total_seconds() / 60.0
+                        if minutes_since >= cal.sync_interval_minutes:
+                            should_sync = True
+                    except Exception as e:
+                        logger.warning("Failed to parse last_synced_at for calendar %s: %s", cal.id, e)
+                        should_sync = True
+                        
+                if should_sync:
+                    logger.info("Auto-syncing calendar: %s (ID: %s)", cal.name, cal.id)
+                    try:
+                        self._do_sync_calendar(cal)
+                    except Exception as e:
+                        logger.error("Failed to sync calendar %s: %s", cal.id, e)
+        except Exception as e:
+            logger.error("Error in auto sync process: %s", e)
 
     # ─── Calendar Events ──────────────────────────────────────────
 
