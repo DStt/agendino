@@ -26,9 +26,12 @@ config = {}
 
 
 def get_config():
+    if config.get('init', False):
+        return config
     items = os.environ.items()
     for item in items:
         config[item[0]] = item[1]
+    config['init'] = True
     return config
 
 
@@ -39,8 +42,9 @@ def get_root_path() -> str:
 
 
 def get_sqlite_db_repository() -> SqliteDBRepository:
+    _config = get_config()
     return SqliteDBRepository(
-        db_name=os.getenv("DATABASE_NAME", "agendino.db"),
+        db_name=_config["DATABASE_NAME"],
         db_path=os.path.join(get_root_path(), "settings"),
         init_sql_script=os.path.join(get_root_path(), "settings/db_init.sql"),
     )
@@ -51,23 +55,27 @@ def get_local_recordings_repository() -> LocalRecordingsRepository:
 
 
 def get_transcription_service() -> TranscriptionService:
-    return TranscriptionService(api_key=os.getenv("GEMINI_API_KEY"))
+    _config = get_config()
+    return TranscriptionService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
 
 
 def get_whisper_transcription_service() -> WhisperTranscriptionService:
+    _config = get_config()
     return WhisperTranscriptionService(
-        model_size=os.getenv("WHISPER_MODEL_SIZE", "small"),
-        device=os.getenv("WHISPER_DEVICE", "cpu"),
-        compute_type=os.getenv("WHISPER_COMPUTE_TYPE", "auto"),
+        model_size=_config["WHISPER_MODEL_SIZE"],
+        device=_config["WHISPER_DEVICE"],
+        compute_type=_config["WHISPER_COMPUTE_TYPE"],
     )
 
 
 def get_summarization_service() -> SummarizationService:
-    return SummarizationService(api_key=os.getenv("GEMINI_API_KEY"))
+    _config = get_config()
+    return SummarizationService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
 
 
 def get_task_generation_service() -> TaskGenerationService:
-    return TaskGenerationService(api_key=os.getenv("GEMINI_API_KEY"))
+    _config = get_config()
+    return TaskGenerationService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
 
 
 def get_system_prompts_repository() -> SystemPromptsRepository:
@@ -75,9 +83,10 @@ def get_system_prompts_repository() -> SystemPromptsRepository:
 
 
 def get_notion_service() -> NotionService:
+    _config = get_config()
     return NotionService(
-        api_key=os.getenv("NOTION_API_KEY", ""),
-        parent_page_id=os.getenv("NOTION_PAGE_ID", ""),
+        api_key=_config["NOTION_API_KEY"],
+        parent_page_id=_config["NOTION_PAGE_ID"],
     )
 
 
@@ -90,14 +99,9 @@ def _build_publish_services() -> dict:
     return services
 
 
-def get_daily_recap_service() -> DailyRecapService | None:
-    key = os.getenv("GEMINI_API_KEY")
-    if not key:
-        return None
-    try:
-        return DailyRecapService(api_key=key)
-    except Exception:
-        return None
+def get_daily_recap_service() -> DailyRecapService:
+    _config = get_config()
+    return DailyRecapService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
 
 
 def get_dashboard_controller() -> DashboardController:
@@ -133,14 +137,17 @@ def get_proactor_controller() -> ProactorController:
 
 
 def get_vector_store_repository() -> VectorStoreRepository:
+    _config = get_config()
     return VectorStoreRepository(
         persist_path=os.path.join(get_root_path(), "settings/vector_store"),
-        api_key=os.getenv("GEMINI_API_KEY"),
+        api_key=_config["GEMINI_API_KEY"],
+        model=_config["GEMINI_EMBEDDING_MODEL"],
     )
 
 
 def get_rag_service() -> RAGService:
-    return RAGService(api_key=os.getenv("GEMINI_API_KEY"))
+    _config = get_config()
+    return RAGService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
 
 
 def get_rag_controller() -> RAGController:

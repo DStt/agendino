@@ -1,6 +1,7 @@
 import logging
 
 import chromadb
+from google import genai
 
 logger = logging.getLogger(__name__)
 
@@ -8,25 +9,19 @@ logger = logging.getLogger(__name__)
 class VectorStoreRepository:
     """Wraps ChromaDB with Gemini embeddings for summary vector storage."""
 
-    def __init__(self, persist_path: str, api_key: str | None = None):
+    def __init__(self, persist_path: str, api_key: str, model: str):
         self._persist_path = persist_path
         self._client = chromadb.PersistentClient(path=persist_path)
         self._collection = self._client.get_or_create_collection(
             name="summaries",
             metadata={"hnsw:space": "cosine"},
         )
-        self._api_key = api_key
-        self._genai_client = None
-        if api_key:
-            from google import genai
-
-            self._genai_client = genai.Client(api_key=api_key)
+        self._genai_client = genai.Client(api_key=api_key)
+        self._model = model
 
     def _embed(self, texts: list[str]) -> list[list[float]]:
-        if not self._genai_client:
-            raise ValueError("No API key configured for embeddings")
         result = self._genai_client.models.embed_content(
-            model="gemini-embedding-001",
+            model=self._model,
             contents=texts,
         )
         embeddings = result.embeddings or []

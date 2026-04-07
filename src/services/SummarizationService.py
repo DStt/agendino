@@ -1,12 +1,12 @@
-import os
 import json
 import logging
 
+from google import genai
+from google.genai import types
 from json_repair import repair_json
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-2.5-flash"
 MAX_OUTPUT_TOKENS = 65536
 
 STRUCTURED_INSTRUCTIONS = """
@@ -28,17 +28,12 @@ Use the language from the instruction not the transcript to generate the summary
 
 
 class SummarizationService:
-    def __init__(self, api_key: str | None = None):
-        key = api_key or os.environ.get("GEMINI_API_KEY")
-        if not key:
-            raise ValueError("GEMINI_API_KEY environment variable is not set")
-        from google import genai
-
-        self._client = genai.Client(api_key=key)
+    def __init__(self, api_key: str, model: str):
+        self._model = model
+        self._client = genai.Client(api_key=api_key)
 
     def summarize(self, transcript: str, system_prompt: str, recording_datetime: str | None = None) -> dict:
         """Summarize a transcript and return structured result with title, tags, and summary."""
-        from google.genai import types
 
         # Build the enriched system instruction
         full_system_prompt = system_prompt + STRUCTURED_INSTRUCTIONS
@@ -51,7 +46,7 @@ class SummarizationService:
 
         logger.info("Generating structured summary with Gemini…")
         response = self._client.models.generate_content(
-            model=MODEL,
+            model=self._model,
             config=types.GenerateContentConfig(
                 system_instruction=full_system_prompt,
                 response_mime_type="application/json",

@@ -1,6 +1,8 @@
 import os
 import logging
 from pathlib import Path
+from google import genai
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
@@ -22,21 +24,16 @@ Output format:
 [00:15] Speaker 2: ...
 """
 
-MODEL = "gemini-2.5-flash"
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
 
 
 class TranscriptionService:
-    def __init__(self, api_key: str | None = None):
-        key = api_key or os.environ.get("GEMINI_API_KEY")
-        if not key:
-            raise ValueError("GEMINI_API_KEY environment variable is not set")
-        from google import genai
-
-        self._client = genai.Client(api_key=key)
+    def __init__(self, api_key: str, model: str):
+        self._client = genai.Client(api_key=api_key)
+        self._model = model
 
     def transcribe(self, audio_path: str, mime_type: str = "audio/mpeg") -> str:
         """Upload an audio file to Gemini and return the transcription text."""
-        from google.genai import types
 
         path = Path(audio_path)
         if not path.exists():

@@ -1,12 +1,11 @@
 import json
 import logging
-import os
 
+from google import genai
+from google.genai import types
 from json_repair import repair_json
 
 logger = logging.getLogger(__name__)
-
-MODEL = "gemini-2.5-flash"
 
 MIND_MAP_PROMPT = """You are a knowledge-mapping expert. Analyze the summaries and produce a
 clean, hierarchical mind map.
@@ -53,18 +52,12 @@ Answer:"""
 
 
 class RAGService:
-    def __init__(self, api_key: str | None = None):
-        key = api_key or os.environ.get("GEMINI_API_KEY")
-        if not key:
-            raise ValueError("GEMINI_API_KEY environment variable is not set")
-        from google import genai
-
-        self._client = genai.Client(api_key=key)
+    def __init__(self, api_key, model: str):
+        self._client = genai.Client(api_key=api_key)
+        self._model = model
 
     def ask(self, question: str, context_docs: list[dict]) -> dict:
         """RAG query: answer a question using retrieved context."""
-        from google.genai import types
-
         context_parts = []
         sources = []
         for i, doc in enumerate(context_docs):
@@ -85,7 +78,7 @@ class RAGService:
         prompt = RAG_PROMPT.format(context=context, question=question)
 
         response = self._client.models.generate_content(
-            model=MODEL,
+            model=self._model,
             config=types.GenerateContentConfig(
                 max_output_tokens=4096,
             ),
@@ -99,7 +92,6 @@ class RAGService:
 
     def generate_mind_map(self, summaries: list[dict]) -> dict:
         """Generate a mind map structure from summaries using Gemini."""
-        from google.genai import types
 
         summary_texts = []
         for s in summaries:
@@ -113,7 +105,7 @@ class RAGService:
 
         logger.info("Generating mind map with Gemini for %d summaries…", len(summaries))
         response = self._client.models.generate_content(
-            model=MODEL,
+            model=self._model,
             config=types.GenerateContentConfig(
                 system_instruction=MIND_MAP_PROMPT,
                 response_mime_type="application/json",

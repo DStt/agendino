@@ -1,12 +1,13 @@
 import os
 import json
 import logging
+from google import genai
+from google.genai import types
 
 from json_repair import repair_json
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-2.5-flash"
 MAX_OUTPUT_TOKENS = 8192
 
 TASK_GENERATION_PROMPT = """You are a project management assistant. Given a meeting summary, generate actionable tasks that could be added to a Jira board.
@@ -38,18 +39,12 @@ Return ONLY the JSON array, no other text before or after it.
 
 
 class TaskGenerationService:
-    def __init__(self, api_key: str | None = None):
-        key = api_key or os.environ.get("GEMINI_API_KEY")
-        if not key:
-            raise ValueError("GEMINI_API_KEY environment variable is not set")
-        from google import genai
-
-        self._client = genai.Client(api_key=key)
+    def __init__(self, api_key: str, model: str):
+        self._client = genai.Client(api_key=api_key)
+        self._model = model
 
     def generate_tasks(self, summary_text: str, summary_title: str | None = None) -> list[dict]:
         """Generate actionable tasks from a meeting summary using Gemini AI."""
-        from google.genai import types
-
         user_content = ""
         if summary_title:
             user_content += f"Meeting title: {summary_title}\n\n"
@@ -57,7 +52,7 @@ class TaskGenerationService:
 
         logger.info("Generating tasks from summary with Gemini…")
         response = self._client.models.generate_content(
-            model=MODEL,
+            model=self._model,
             config=types.GenerateContentConfig(
                 system_instruction=TASK_GENERATION_PROMPT,
                 response_mime_type="application/json",

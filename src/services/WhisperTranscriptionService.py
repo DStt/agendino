@@ -3,16 +3,12 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Default model size – "small" is a good trade-off between speed and accuracy.
-# Options: tiny, base, small, medium, large-v3
-DEFAULT_MODEL_SIZE = "small"
-
 
 class WhisperTranscriptionService:
     """Transcribe audio locally using faster-whisper (CTranslate2 Whisper)."""
 
-    def __init__(self, model_size: str | None = None, device: str = "cpu", compute_type: str = "auto"):
-        self._model_size = model_size or DEFAULT_MODEL_SIZE
+    def __init__(self, model_size: str, device: str, compute_type: str):
+        self._model_size = model_size
         self._device = device
         self._compute_type = compute_type
         self._model = None  # lazy-loaded
@@ -35,7 +31,7 @@ class WhisperTranscriptionService:
             logger.info("Whisper model loaded.")
         return self._model
 
-    def transcribe(self, audio_path: str, mime_type: str = "audio/mpeg") -> str:
+    def transcribe(self, audio_path: str) -> str:
         """Transcribe an audio file locally with Whisper and return formatted text."""
         path = Path(audio_path)
         if not path.exists():

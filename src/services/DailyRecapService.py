@@ -1,12 +1,12 @@
-import os
 import json
 import logging
 
+from google import genai
+from google.genai import types
 from json_repair import repair_json
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-2.5-flash"
 MAX_OUTPUT_TOKENS = 16384
 
 DAILY_RECAP_PROMPT = """You are a productivity assistant. Given a list of calendar events and meeting summaries for a specific day, generate a comprehensive daily recap.
@@ -33,18 +33,12 @@ Return ONLY the JSON object, no other text before or after it.
 
 
 class DailyRecapService:
-    def __init__(self, api_key: str | None = None):
-        key = api_key or os.environ.get("GEMINI_API_KEY")
-        if not key:
-            raise ValueError("GEMINI_API_KEY environment variable is not set")
-        from google import genai
-
-        self._client = genai.Client(api_key=key)
+    def __init__(self, api_key: str, model: str):
+        self._client = genai.Client(api_key=api_key)
+        self._model = model
 
     def generate_recap(self, date_str: str, events: list[dict], summaries: list[dict]) -> dict:
         """Generate a daily recap from events and summaries."""
-        from google.genai import types
-
         # Build context
         context_parts = [f"Date: {date_str}\n"]
 
@@ -71,7 +65,7 @@ class DailyRecapService:
 
         logger.info("Generating daily recap for %s with Gemini…", date_str)
         response = self._client.models.generate_content(
-            model=MODEL,
+            model=self._model,
             config=types.GenerateContentConfig(
                 system_instruction=DAILY_RECAP_PROMPT,
                 response_mime_type="application/json",
