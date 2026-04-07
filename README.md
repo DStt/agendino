@@ -1,5 +1,8 @@
 # Agendino
 
+[![Tests](https://github.com/DStt/agendino/actions/workflows/tests.yml/badge.svg)](https://github.com/DStt/agendino/actions/workflows/tests.yml)
+[![Style](https://github.com/DStt/agendino/actions/workflows/style.yml/badge.svg)](https://github.com/DStt/agendino/actions/workflows/style.yml)
+
 Agendino is a web-based dashboard for managing, transcribing, and summarizing audio recordings from [HiDock](https://www.hidock.com/) USB devices. It connects directly to HiDock H1, H1E, and P1 devices over USB, syncs recordings locally, transcribes them using Google Gemini or locally with Whisper, generates structured AI summaries with customizable system prompts, and optionally publishes results to Notion.
 
 ## Features
