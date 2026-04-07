@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-
 # Thresholds (configurable later)
 BACK_TO_BACK_THRESHOLD_MIN = 5  # Events with < 5 min gap
 SHORT_GAP_THRESHOLD_MIN = 15  # Gaps shorter than 15 min flagged as "tight"

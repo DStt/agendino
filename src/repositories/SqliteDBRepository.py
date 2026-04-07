@@ -319,8 +319,7 @@ class SqliteDBRepository:
     def get_latest_summaries_map(self) -> dict[str, DBSummary]:
         conn = self._connect()
         try:
-            rows = conn.execute(
-                """
+            rows = conn.execute("""
                 SELECT
                     s.id,
                     s.recording_id,
@@ -339,8 +338,7 @@ class SqliteDBRepository:
                     FROM summary
                     GROUP BY recording_id
                 ) m ON m.recording_id = s.recording_id AND m.max_version = s.version
-                """
-            ).fetchall()
+                """).fetchall()
             return {row["recording_name"]: DBSummary.from_dict(row) for row in rows}
         finally:
             conn.close()
@@ -528,8 +526,7 @@ class SqliteDBRepository:
         """Create calendar tables if they don't exist (migration-safe)."""
         conn = self._connect()
         try:
-            conn.executescript(
-                """
+            conn.executescript("""
                 CREATE TABLE IF NOT EXISTS shared_calendar (
                     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
                     name                  TEXT    NOT NULL,
@@ -586,8 +583,7 @@ class SqliteDBRepository:
                     updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
                 );
                 CREATE INDEX IF NOT EXISTS idx_daily_recap_date ON daily_recap (date);
-            """
-            )
+            """)
             # Migration: add shared_calendar_id column if missing on existing DB
             try:
                 conn.execute("SELECT shared_calendar_id FROM calendar_event LIMIT 1")
@@ -983,14 +979,12 @@ class SqliteDBRepository:
         self._ensure_calendar_tables()
         conn = self._connect()
         try:
-            rows = conn.execute(
-                """
+            rows = conn.execute("""
                 SELECT sc.*,
                        (SELECT COUNT(*) FROM calendar_event ce WHERE ce.shared_calendar_id = sc.id) AS event_count
                 FROM shared_calendar sc
                 ORDER BY sc.name ASC
-                """
-            ).fetchall()
+                """).fetchall()
             calendars = []
             for row in rows:
                 cal = DBSharedCalendar.from_dict(row)
