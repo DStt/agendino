@@ -4,7 +4,9 @@ from fastapi.responses import FileResponse
 from app import depends
 from controllers.DashboardController import DashboardController, MIME_TYPES
 from models.dto.DeleteRecordingRequestDTO import DeleteRecordingRequestDTO
+from models.dto.FolderRequestDTO import CreateFolderRequestDTO, RenameFolderRequestDTO, DeleteFolderRequestDTO
 from models.dto.GenerateTasksRequestDTO import GenerateTasksRequestDTO
+from models.dto.MoveRecordingRequestDTO import MoveRecordingRequestDTO, BulkMoveRecordingsRequestDTO
 from models.dto.PublishRequestDTO import PublishRequestDTO
 from models.dto.SummarizeRequestDTO import SummarizeRequestDTO
 from models.dto.TranscribeRequestDTO import TranscribeRequestDTO
@@ -199,3 +201,55 @@ async def delete_task(
     dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
 ):
     return dashboard_controller.delete_task(task_id)
+
+
+# ─── Folders ─────────────────────────────────────────────────────
+
+
+@router.get("/folders")
+async def get_folders(
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.get_folders()
+
+
+@router.post("/folders")
+async def create_folder(
+    body: CreateFolderRequestDTO,
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.create_folder(body.path)
+
+
+@router.patch("/folders/rename")
+async def rename_folder(
+    body: RenameFolderRequestDTO,
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.rename_folder(body.old_path, body.new_path)
+
+
+@router.delete("/folders")
+async def delete_folder(
+    body: DeleteFolderRequestDTO,
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.delete_folder(body.path, body.move_to)
+
+
+@router.patch("/recording/{name}/move")
+async def move_recording(
+    name: str,
+    body: MoveRecordingRequestDTO,
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.move_recording(name, body.folder)
+
+
+@router.patch("/recordings/move")
+async def bulk_move_recordings(
+    body: BulkMoveRecordingsRequestDTO,
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.bulk_move_recordings(body.names, body.folder)
+

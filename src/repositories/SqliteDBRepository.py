@@ -32,7 +32,7 @@ class SqliteDBRepository:
         conn.close()
 
     def _ensure_recording_columns(self) -> None:
-        """Migration: add file_extension and recorded_at columns if missing on existing DB."""
+        """Migration: add file_extension, recorded_at, and folder columns if missing on existing DB."""
         conn = self._connect()
         try:
             try:
@@ -45,6 +45,11 @@ class SqliteDBRepository:
             except Exception:
                 conn.execute("ALTER TABLE recording ADD COLUMN recorded_at TEXT DEFAULT NULL")
                 conn.commit()
+            try:
+                conn.execute("SELECT folder FROM recording LIMIT 1")
+            except Exception:
+                conn.execute("ALTER TABLE recording ADD COLUMN folder TEXT NOT NULL DEFAULT '/'")
+                conn.commit()
         finally:
             conn.close()
 
@@ -52,7 +57,7 @@ class SqliteDBRepository:
         conn = self._connect()
         try:
             result = conn.execute(
-                "SELECT id, name, label, duration, file_extension, recorded_at, created_at, transcript FROM recording"
+                "SELECT id, name, label, duration, file_extension, recorded_at, created_at, transcript, folder FROM recording"
             )
             db_files = result.fetchall()
             recordings = [DBRecording.from_dict(row) for row in db_files]
@@ -66,7 +71,7 @@ class SqliteDBRepository:
         conn = self._connect()
         try:
             result = conn.execute(
-                "SELECT id, name, label, duration, file_extension, recorded_at, created_at, transcript "
+                "SELECT id, name, label, duration, file_extension, recorded_at, created_at, transcript, folder "
                 "FROM recording WHERE name = ?",
                 (name,),
             )
@@ -101,8 +106,8 @@ class SqliteDBRepository:
         conn = self._connect()
         try:
             result = conn.execute(
-                "INSERT INTO recording (id, name, label, duration, file_extension, created_at, transcript) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO recording (id, name, label, duration, file_extension, created_at, transcript, folder) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     db_recording.id,
                     db_recording.name,
@@ -111,6 +116,7 @@ class SqliteDBRepository:
                     db_recording.file_extension,
                     db_recording.created_at,
                     db_recording.transcript,
+                    db_recording.folder,
                 ),
             )
             conn.commit()
@@ -349,6 +355,95 @@ class SqliteDBRepository:
             result = conn.execute("DELETE FROM recording WHERE name = ?", (name,))
             conn.commit()
             return result.rowcount > 0
+        finally:
+            conn.close()
+
+    # ─── Folder operations ────────────────────────────────────────
+
+    def get_recording_folders(self) -> list[str]:
+        """Return all distinct folder paths used by recordings, sorted."""
+        conn = self._connect()
+        try:
+            rows = conn.execute("SELECT DISTINCT folder FROM recording ORDER BY folder").fetchall()
+            folders = [row["folder"] for row in rows]
+            if "/" not in folders:
+                folders.insert(0, "/")
+            return folders
+        finally:
+            conn.close()
+
+    def move_recording_to_folder(self, name: str, folder: str) -> bool:
+        """Move a recording to a different folder."""
+        conn = self._connect()
+        try:
+            result = conn.execute("UPDATE recording SET folder = ? WHERE name = ?", (folder, name))
+            conn.commit()
+            return result.rowcount > 0
+        finally:
+            conn.close()
+
+    def rename_folder(self, old_path: str, new_path: str) -> int:
+        """Rename a folder and all its sub-folders. Returns number of updated recordings."""
+        conn = self._connect()
+        try:
+            # Exact match
+            result1 = conn.execute(
+                "UPDATE recording SET folder = ? WHERE folder = ?",
+                (new_path, old_path),
+            )
+            count = result1.rowcount
+            # Sub-folders: old_path + '/' prefix → new_path + '/' prefix
+            if not old_path.endswith("/"):
+                old_prefix = old_path + "/"
+            else:
+                old_prefix = old_path
+            if not new_path.endswith("/"):
+                new_prefix = new_path + "/"
+            else:
+                new_prefix = new_path
+            rows = conn.execute(
+                "SELECT id, folder FROM recording WHERE folder LIKE ?",
+                (old_prefix + "%",),
+            ).fetchall()
+            for row in rows:
+                updated_folder = new_prefix + row["folder"][len(old_prefix):]
+                conn.execute("UPDATE recording SET folder = ? WHERE id = ?", (updated_folder, row["id"]))
+                count += 1
+            conn.commit()
+            return count
+        finally:
+            conn.close()
+
+    def delete_folder(self, folder_path: str, move_to: str = "/") -> int:
+        """Move all recordings from a folder (and sub-folders) to *move_to*. Returns count."""
+        conn = self._connect()
+        try:
+            result1 = conn.execute(
+                "UPDATE recording SET folder = ? WHERE folder = ?",
+                (move_to, folder_path),
+            )
+            count = result1.rowcount
+            prefix = folder_path if folder_path.endswith("/") else folder_path + "/"
+            result2 = conn.execute(
+                "UPDATE recording SET folder = ? WHERE folder LIKE ?",
+                (move_to, prefix + "%"),
+            )
+            count += result2.rowcount
+            conn.commit()
+            return count
+        finally:
+            conn.close()
+
+    def bulk_move_recordings_to_folder(self, names: list[str], folder: str) -> int:
+        """Move multiple recordings to a folder. Returns number updated."""
+        conn = self._connect()
+        try:
+            count = 0
+            for name in names:
+                result = conn.execute("UPDATE recording SET folder = ? WHERE name = ?", (folder, name))
+                count += result.rowcount
+            conn.commit()
+            return count
         finally:
             conn.close()
 

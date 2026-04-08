@@ -163,8 +163,12 @@ class DashboardController:
                     "has_summary": latest_summary is not None,
                     "summary_count": len(self._sqlite_db_repository.get_summaries(bare_name)) if db_rec else 0,
                     "notion_url": latest_summary.notion_url if latest_summary else None,
+                    "folder": db_rec.folder if db_rec else "/",
                 }
             )
+
+        # Build folder tree
+        folders = self._sqlite_db_repository.get_recording_folders()
 
         return {
             "device": {
@@ -178,6 +182,7 @@ class DashboardController:
                 "db": len(db_recordings),
             },
             "recordings": recordings,
+            "folders": folders,
         }
 
     def upload_recording(self, filename: str, file_data: bytes, label: str = "") -> dict:
@@ -618,3 +623,66 @@ class DashboardController:
         if not deleted:
             return {"ok": False, "error": f"Task '{task_id}' not found"}
         return {"ok": True, "deleted": task_id}
+
+    # ─── Folders ─────────────────────────────────────────────────
+
+    @staticmethod
+    def _normalize_folder_path(path: str) -> str:
+        """Normalize a folder path: strip whitespace, ensure leading /, collapse slashes."""
+        path = path.strip()
+        if not path:
+            return "/"
+        # Collapse multiple slashes, strip trailing slash (unless root)
+        parts = [p for p in path.split("/") if p]
+        if not parts:
+            return "/"
+        return "/" + "/".join(parts)
+
+    def get_folders(self) -> dict:
+        folders = self._sqlite_db_repository.get_recording_folders()
+        return {"ok": True, "folders": folders}
+
+    def create_folder(self, path: str) -> dict:
+        """Create a folder (virtual — just validate the path)."""
+        normalized = self._normalize_folder_path(path)
+        if normalized == "/":
+            return {"ok": False, "error": "Cannot create root folder"}
+        # Folders are implicit — they exist as long as a recording uses them.
+        # We return success; the folder will appear once a recording is moved there.
+        return {"ok": True, "path": normalized}
+
+    def move_recording(self, name: str, folder: str) -> dict:
+        bare_name = self._bare_name(name)
+        normalized = self._normalize_folder_path(folder)
+        db_rec = self._sqlite_db_repository.get_recording_by_name(bare_name)
+        if not db_rec:
+            return {"ok": False, "error": f"Recording '{bare_name}' not found in database"}
+        moved = self._sqlite_db_repository.move_recording_to_folder(bare_name, normalized)
+        if not moved:
+            return {"ok": False, "error": "Failed to move recording"}
+        return {"ok": True, "name": bare_name, "folder": normalized}
+
+    def bulk_move_recordings(self, names: list[str], folder: str) -> dict:
+        normalized = self._normalize_folder_path(folder)
+        bare_names = [self._bare_name(n) for n in names]
+        count = self._sqlite_db_repository.bulk_move_recordings_to_folder(bare_names, normalized)
+        return {"ok": True, "moved": count, "folder": normalized}
+
+    def rename_folder(self, old_path: str, new_path: str) -> dict:
+        old_normalized = self._normalize_folder_path(old_path)
+        new_normalized = self._normalize_folder_path(new_path)
+        if old_normalized == "/":
+            return {"ok": False, "error": "Cannot rename root folder"}
+        if new_normalized == "/":
+            return {"ok": False, "error": "New name cannot be root"}
+        count = self._sqlite_db_repository.rename_folder(old_normalized, new_normalized)
+        return {"ok": True, "old_path": old_normalized, "new_path": new_normalized, "updated": count}
+
+    def delete_folder(self, path: str, move_to: str = "/") -> dict:
+        normalized = self._normalize_folder_path(path)
+        move_to_normalized = self._normalize_folder_path(move_to)
+        if normalized == "/":
+            return {"ok": False, "error": "Cannot delete root folder"}
+        count = self._sqlite_db_repository.delete_folder(normalized, move_to_normalized)
+        return {"ok": True, "path": normalized, "moved_to": move_to_normalized, "moved_count": count}
+

@@ -20,6 +20,9 @@ const TASKS_GENERATE_URL = "/api/dashboard/tasks/generate";
 const TASKS_URL = "/api/dashboard/tasks";
 const UPLOAD_URL = "/api/dashboard/upload";
 const RECORDING_UPDATE_URL = "/api/dashboard/recording";
+const FOLDERS_URL = "/api/dashboard/folders";
+const MOVE_RECORDING_URL = "/api/dashboard/recording";
+const BULK_MOVE_URL = "/api/dashboard/recordings/move";
 
 const $ = (sel) => document.querySelector(sel);
 const show = (el) => el?.classList.remove("d-none");
@@ -27,6 +30,9 @@ const hide = (el) => el?.classList.add("d-none");
 
 // ─── WebUSB device state ────────────────────────────────────────
 let _cachedDeviceData = null; // { info, files, storage } from last device probe
+let _currentFolder = null;   // null = "All", "/" = root only, "/path" = specific folder
+let _allRecordings = [];     // all recordings from last fetch
+let _allFolders = [];        // all folder paths from last fetch
 
 function formatDuration(seconds) {
     if (seconds == null) return "—";
@@ -73,6 +79,9 @@ function actionButtons(rec) {
             </div>`);
         }
     }
+    if (rec.in_db) {
+        btns.push(`<button class="btn btn-sm btn-outline-primary btn-move-recording" data-name="${rec.name}" title="Move to folder"><i class="bi bi-folder-symlink"></i></button>`);
+    }
     if (rec.on_device || rec.on_local || rec.in_db) {
         btns.push(`<button class="btn btn-sm btn-outline-danger btn-delete-recording" data-name="${rec.name}" data-on-device="${rec.on_device}" data-on-local="${rec.on_local}" data-in-db="${rec.in_db}" title="Delete recording…"><i class="bi bi-trash3"></i></button>`);
     }
@@ -114,6 +123,7 @@ function renderRow(rec) {
     }
     const titleCell = rec.summary_count > 1 ? `${titleStr} <span class="badge bg-info-subtle text-info-emphasis ms-1">v${rec.summary_count}</span>` : titleStr;
     return `<tr>
+        <td class="text-center"><input type="checkbox" class="rec-checkbox" data-name="${rec.name}" ${!rec.in_db ? "disabled title=\"Not in DB\"" : ""}></td>
         <td class="fw-semibold">${rec.name}</td>
         <td>${dateCell}</td>
         <td>${formatDuration(rec.duration)}</td>
@@ -205,6 +215,7 @@ function mergeDeviceData(serverData, deviceData) {
                 has_summary: false,
                 summary_count: 0,
                 notion_url: null,
+                folder: "/",
             });
         }
     }
@@ -226,6 +237,157 @@ function mergeDeviceData(serverData, deviceData) {
     }
 
     return serverData;
+}
+
+// ─── Folder helpers ─────────────────────────────────────────────
+
+function buildFolderTree(folders) {
+    // Build a nested tree from flat folder paths
+    const root = { name: "All", path: null, children: {}, count: 0 };
+    const rootFolder = { name: "/", path: "/", children: {}, count: 0 };
+    root.children["/"] = rootFolder;
+
+    for (const folderPath of folders) {
+        if (folderPath === "/") continue;
+        const parts = folderPath.split("/").filter(p => p);
+        let current = rootFolder;
+        let built = "";
+        for (const part of parts) {
+            built += "/" + part;
+            if (!current.children[part]) {
+                current.children[part] = { name: part, path: built, children: {}, count: 0 };
+            }
+            current = current.children[part];
+        }
+    }
+    return root;
+}
+
+function countRecordingsInFolder(recordings, folderPath) {
+    if (folderPath === null) return recordings.length; // "All"
+    return recordings.filter(r => {
+        const rf = r.folder || "/";
+        if (folderPath === "/") return rf === "/";
+        return rf === folderPath || rf.startsWith(folderPath + "/");
+    }).length;
+}
+
+function renderFolderTreeNode(node, recordings, level = 0) {
+    const children = Object.values(node.children);
+    const count = countRecordingsInFolder(recordings, node.path);
+    const isActive = _currentFolder === node.path;
+    const isRoot = node.path === null;
+    const isRootDir = node.path === "/";
+    const icon = isRoot ? "bi-collection" : (isActive ? "bi-folder2-open" : "bi-folder");
+    const indent = level > 0 ? `padding-left: ${level * 1}rem` : "";
+
+    let html = `<div class="folder-tree-item ${isActive ? 'active' : ''}" data-folder-path="${node.path}" style="${indent}">
+        <i class="bi ${icon} folder-icon"></i>
+        <span class="folder-name" title="${node.path || 'All recordings'}">${isRoot ? 'All' : node.name}</span>
+        <span class="folder-count">${count}</span>`;
+
+    if (!isRoot && !isRootDir) {
+        html += `<span class="folder-actions">
+            <button class="btn btn-rename-folder" data-folder-path="${node.path}" title="Rename"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-delete-folder" data-folder-path="${node.path}" title="Delete"><i class="bi bi-trash3"></i></button>
+        </span>`;
+    }
+    html += `</div>`;
+
+    if (children.length > 0) {
+        html += `<div class="folder-tree-children">`;
+        for (const child of children.sort((a, b) => a.name.localeCompare(b.name))) {
+            html += renderFolderTreeNode(child, recordings, level + 1);
+        }
+        html += `</div>`;
+    }
+    return html;
+}
+
+function renderFolderTree(folders, recordings) {
+    const treeEl = $("#folder-tree");
+    if (!treeEl) return;
+
+    // Ensure all recording folders appear in the tree
+    const allFolders = new Set(folders);
+    for (const rec of recordings) {
+        if (rec.folder && rec.folder !== "/") allFolders.add(rec.folder);
+    }
+
+    const tree = buildFolderTree([...allFolders]);
+    treeEl.innerHTML = renderFolderTreeNode(tree, recordings);
+}
+
+function renderBreadcrumb(folderPath) {
+    const el = $("#folder-breadcrumb");
+    if (!el) return;
+    if (folderPath === null) {
+        el.innerHTML = '<i class="bi bi-collection me-1"></i>All recordings';
+        return;
+    }
+    if (folderPath === "/") {
+        el.innerHTML = '<span class="breadcrumb-part" data-folder-path="null"><i class="bi bi-collection me-1"></i>All</span> / <strong>/</strong>';
+        return;
+    }
+    const parts = folderPath.split("/").filter(p => p);
+    let html = '<span class="breadcrumb-part" data-folder-path="null"><i class="bi bi-collection me-1"></i>All</span>';
+    html += ' / <span class="breadcrumb-part" data-folder-path="/">/</span>';
+    let built = "";
+    for (let i = 0; i < parts.length; i++) {
+        built += "/" + parts[i];
+        if (i === parts.length - 1) {
+            html += ` / <strong>${parts[i]}</strong>`;
+        } else {
+            html += ` / <span class="breadcrumb-part" data-folder-path="${built}">${parts[i]}</span>`;
+        }
+    }
+    el.innerHTML = html;
+}
+
+function filterRecordingsByFolder(recordings, folderPath) {
+    if (folderPath === null) return recordings;
+    return recordings.filter(r => {
+        const rf = r.folder || "/";
+        if (folderPath === "/") return rf === "/";
+        return rf === folderPath || rf.startsWith(folderPath + "/");
+    });
+}
+
+function updateBulkActionsBar() {
+    const bar = $("#bulk-actions-bar");
+    const countEl = $("#bulk-selected-count");
+    if (!bar || !countEl) return;
+    const checked = document.querySelectorAll(".rec-checkbox:checked");
+    if (checked.length > 0) {
+        countEl.textContent = `${checked.length} selected`;
+        show(bar);
+    } else {
+        hide(bar);
+    }
+}
+
+function renderFilteredTable() {
+    const table = $("#recordings-table");
+    const tbody = $("#recordings-body");
+    const emptyEl = $("#empty-state");
+
+    const filtered = filterRecordingsByFolder(_allRecordings, _currentFolder);
+    renderBreadcrumb(_currentFolder);
+
+    if (filtered.length === 0) {
+        hide(table);
+        show(emptyEl);
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(renderRow).join("");
+    show(table);
+    hide(emptyEl);
+
+    // Reset select-all
+    const selectAll = $("#select-all-recordings");
+    if (selectAll) selectAll.checked = false;
+    hide($("#bulk-actions-bar"));
 }
 
 async function loadDashboard() {
@@ -253,6 +415,10 @@ async function loadDashboard() {
             _cachedDeviceData = deviceData;
             data = mergeDeviceData(data, deviceData);
         }
+
+        // Store globally for folder filtering
+        _allRecordings = data.recordings || [];
+        _allFolders = data.folders || ["/"];
 
         // Update status cards
         $("#count-device").textContent = data.counts.device;
@@ -283,16 +449,12 @@ async function loadDashboard() {
             hide(storageEl);
         }
 
-        // Render table
+        // Render folder tree
+        renderFolderTree(_allFolders, _allRecordings);
+
+        // Render table (filtered by current folder)
         hide(loading);
-
-        if (data.recordings.length === 0) {
-            show(emptyEl);
-            return;
-        }
-
-        tbody.innerHTML = data.recordings.map(renderRow).join("");
-        show(table);
+        renderFilteredTable();
     } catch (err) {
         hide(loading);
         errorEl.textContent = `Failed to load recordings: ${err.message}`;
@@ -323,6 +485,326 @@ function hideSyncOverlay() {
 
 document.addEventListener("DOMContentLoaded", () => {
     loadDashboard();
+
+    // ─── Folder tree click handler ──────────────────────────────
+    document.addEventListener("click", (e) => {
+        // Folder tree item click (navigate)
+        const folderItem = e.target.closest(".folder-tree-item");
+        if (folderItem && !e.target.closest(".folder-actions")) {
+            e.preventDefault();
+            const path = folderItem.dataset.folderPath;
+            _currentFolder = path === "null" ? null : path;
+            renderFolderTree(_allFolders, _allRecordings);
+            renderFilteredTable();
+            return;
+        }
+
+        // Breadcrumb click
+        const bcPart = e.target.closest(".breadcrumb-part");
+        if (bcPart) {
+            e.preventDefault();
+            const path = bcPart.dataset.folderPath;
+            _currentFolder = path === "null" ? null : path;
+            renderFolderTree(_allFolders, _allRecordings);
+            renderFilteredTable();
+            return;
+        }
+    });
+
+    // ─── Select-all checkbox ─────────────────────────────────────
+    document.addEventListener("change", (e) => {
+        if (e.target.id === "select-all-recordings") {
+            const checked = e.target.checked;
+            document.querySelectorAll(".rec-checkbox:not(:disabled)").forEach(cb => cb.checked = checked);
+            updateBulkActionsBar();
+            return;
+        }
+        if (e.target.classList.contains("rec-checkbox")) {
+            updateBulkActionsBar();
+            // Update select-all state
+            const all = document.querySelectorAll(".rec-checkbox:not(:disabled)");
+            const allChecked = document.querySelectorAll(".rec-checkbox:checked");
+            const selectAll = $("#select-all-recordings");
+            if (selectAll) selectAll.checked = all.length > 0 && all.length === allChecked.length;
+        }
+    });
+
+    // ─── Create Folder ───────────────────────────────────────────
+    const createFolderBtn = $("#btn-create-folder");
+    const folderModalBackdrop = $("#folder-modal-backdrop");
+    const folderModalClose = $("#folder-modal-close");
+    const folderModalCancel = $("#folder-modal-cancel");
+    const folderPathInput = $("#folder-path-input");
+    const folderModalConfirm = $("#folder-modal-confirm");
+    const folderModalFeedback = $("#folder-modal-feedback");
+    const folderModalTitle = $("#folder-modal-title");
+    let _folderModalMode = "create"; // "create" or "rename"
+    let _folderRenameOldPath = null;
+
+    function openFolderModal(mode = "create", oldPath = null) {
+        _folderModalMode = mode;
+        _folderRenameOldPath = oldPath;
+        if (mode === "rename") {
+            folderModalTitle.innerHTML = '<i class="bi bi-pencil me-2"></i>Rename Folder';
+            folderModalConfirm.innerHTML = '<i class="bi bi-check-lg me-1"></i>Rename';
+            folderPathInput.value = oldPath || "";
+        } else {
+            folderModalTitle.innerHTML = '<i class="bi bi-folder-plus me-2"></i>New Folder';
+            folderModalConfirm.innerHTML = '<i class="bi bi-check-lg me-1"></i>Create';
+            // Pre-fill with current folder as parent
+            const base = _currentFolder && _currentFolder !== "/" ? _currentFolder + "/" : "/";
+            folderPathInput.value = base;
+        }
+        hide(folderModalFeedback);
+        show(folderModalBackdrop);
+        folderPathInput.focus();
+    }
+
+    function closeFolderModal() {
+        hide(folderModalBackdrop);
+    }
+
+    if (createFolderBtn) createFolderBtn.addEventListener("click", (e) => { e.preventDefault(); openFolderModal("create"); });
+    if (folderModalClose) folderModalClose.addEventListener("click", closeFolderModal);
+    if (folderModalCancel) folderModalCancel.addEventListener("click", closeFolderModal);
+    if (folderModalBackdrop) folderModalBackdrop.addEventListener("click", (e) => { if (e.target === folderModalBackdrop) closeFolderModal(); });
+
+    if (folderModalConfirm) {
+        folderModalConfirm.addEventListener("click", async () => {
+            const path = (folderPathInput.value || "").trim();
+            if (!path || path === "/") {
+                folderModalFeedback.className = "small mt-2 text-danger";
+                folderModalFeedback.textContent = "Please enter a valid folder path";
+                show(folderModalFeedback);
+                return;
+            }
+
+            folderModalConfirm.disabled = true;
+            folderModalConfirm.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+            try {
+                if (_folderModalMode === "rename" && _folderRenameOldPath) {
+                    const res = await fetch(`${FOLDERS_URL}/rename`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ old_path: _folderRenameOldPath, new_path: path }),
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        _currentFolder = data.new_path;
+                        closeFolderModal();
+                        await loadDashboard();
+                    } else {
+                        folderModalFeedback.className = "small mt-2 text-danger";
+                        folderModalFeedback.textContent = data.error;
+                        show(folderModalFeedback);
+                    }
+                } else {
+                    // "Create" — just add it to the tree. The folder is implicit.
+                    const res = await fetch(FOLDERS_URL, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ path }),
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        // Add folder to local list and re-render
+                        if (!_allFolders.includes(data.path)) _allFolders.push(data.path);
+                        _currentFolder = data.path;
+                        renderFolderTree(_allFolders, _allRecordings);
+                        renderFilteredTable();
+                        closeFolderModal();
+                    } else {
+                        folderModalFeedback.className = "small mt-2 text-danger";
+                        folderModalFeedback.textContent = data.error;
+                        show(folderModalFeedback);
+                    }
+                }
+            } catch (err) {
+                folderModalFeedback.className = "small mt-2 text-danger";
+                folderModalFeedback.textContent = `Failed: ${err.message}`;
+                show(folderModalFeedback);
+            } finally {
+                folderModalConfirm.disabled = false;
+                folderModalConfirm.innerHTML = _folderModalMode === "rename"
+                    ? '<i class="bi bi-check-lg me-1"></i>Rename'
+                    : '<i class="bi bi-check-lg me-1"></i>Create';
+            }
+        });
+    }
+
+    // Enter key in folder path input
+    if (folderPathInput) {
+        folderPathInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                folderModalConfirm?.click();
+            }
+        });
+    }
+
+    // ─── Rename / Delete folder buttons ──────────────────────────
+    document.addEventListener("click", async (e) => {
+        const renameBtn = e.target.closest(".btn-rename-folder");
+        if (renameBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            openFolderModal("rename", renameBtn.dataset.folderPath);
+            return;
+        }
+
+        const deleteBtn = e.target.closest(".btn-delete-folder");
+        if (deleteBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const path = deleteBtn.dataset.folderPath;
+            const count = countRecordingsInFolder(_allRecordings, path);
+            const msg = count > 0
+                ? `Delete folder "${path}"? ${count} recording(s) will be moved to root (/).`
+                : `Delete empty folder "${path}"?`;
+            if (!confirm(msg)) return;
+
+            try {
+                const res = await fetch(FOLDERS_URL, {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path, move_to: "/" }),
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    if (_currentFolder === path) _currentFolder = null;
+                    await loadDashboard();
+                }
+            } catch (err) {
+                console.error("Failed to delete folder:", err);
+            }
+        }
+    });
+
+    // ─── Move-to-Folder modal ────────────────────────────────────
+    const moveFolderBackdrop = $("#move-folder-modal-backdrop");
+    const moveFolderClose = $("#move-folder-modal-close");
+    const moveFolderCancel = $("#move-folder-cancel");
+    const moveFolderConfirm = $("#move-folder-confirm");
+    const moveFolderTree = $("#move-folder-tree");
+    const moveFolderPathInput = $("#move-folder-path-input");
+    const moveFolderRecName = $("#move-folder-recording-name");
+    const moveFolderFeedback = $("#move-folder-feedback");
+    let _moveRecordingNames = [];  // names to move
+    let _selectedMoveFolder = "/";
+
+    function renderMoveFolderTree() {
+        const allFolders = new Set(_allFolders);
+        for (const rec of _allRecordings) {
+            if (rec.folder && rec.folder !== "/") allFolders.add(rec.folder);
+        }
+        const sorted = [...allFolders].sort();
+
+        let html = "";
+        for (const f of sorted) {
+            const label = f === "/" ? "/ (root)" : f;
+            const isSelected = f === _selectedMoveFolder;
+            html += `<div class="move-folder-item ${isSelected ? 'selected' : ''}" data-path="${f}">
+                <i class="bi ${f === "/" ? "bi-folder" : "bi-folder"} folder-icon"></i>
+                <span>${label}</span>
+            </div>`;
+        }
+        if (moveFolderTree) moveFolderTree.innerHTML = html;
+    }
+
+    function openMoveFolderModal(names) {
+        _moveRecordingNames = names;
+        _selectedMoveFolder = "/";
+        if (moveFolderRecName) {
+            moveFolderRecName.textContent = names.length === 1
+                ? `Moving: ${names[0]}`
+                : `Moving ${names.length} recording(s)`;
+        }
+        if (moveFolderPathInput) moveFolderPathInput.value = "";
+        hide(moveFolderFeedback);
+        renderMoveFolderTree();
+        show(moveFolderBackdrop);
+    }
+
+    function closeMoveFolderModal() {
+        hide(moveFolderBackdrop);
+        _moveRecordingNames = [];
+    }
+
+    if (moveFolderClose) moveFolderClose.addEventListener("click", closeMoveFolderModal);
+    if (moveFolderCancel) moveFolderCancel.addEventListener("click", closeMoveFolderModal);
+    if (moveFolderBackdrop) moveFolderBackdrop.addEventListener("click", (e) => { if (e.target === moveFolderBackdrop) closeMoveFolderModal(); });
+
+    // Click on folder item in move modal
+    document.addEventListener("click", (e) => {
+        const item = e.target.closest(".move-folder-item");
+        if (!item || !moveFolderBackdrop || moveFolderBackdrop.classList.contains("d-none")) return;
+        e.preventDefault();
+        _selectedMoveFolder = item.dataset.path;
+        if (moveFolderPathInput) moveFolderPathInput.value = "";
+        moveFolderTree.querySelectorAll(".move-folder-item").forEach(el => el.classList.remove("selected"));
+        item.classList.add("selected");
+    });
+
+    if (moveFolderConfirm) {
+        moveFolderConfirm.addEventListener("click", async () => {
+            const customPath = (moveFolderPathInput?.value || "").trim();
+            const targetFolder = customPath || _selectedMoveFolder || "/";
+
+            if (_moveRecordingNames.length === 0) return;
+
+            moveFolderConfirm.disabled = true;
+            moveFolderConfirm.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            hide(moveFolderFeedback);
+
+            try {
+                let res;
+                if (_moveRecordingNames.length === 1) {
+                    res = await fetch(`${MOVE_RECORDING_URL}/${encodeURIComponent(_moveRecordingNames[0])}/move`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ folder: targetFolder }),
+                    });
+                } else {
+                    res = await fetch(BULK_MOVE_URL, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ names: _moveRecordingNames, folder: targetFolder }),
+                    });
+                }
+                const data = await res.json();
+                if (data.ok) {
+                    closeMoveFolderModal();
+                    await loadDashboard();
+                } else {
+                    moveFolderFeedback.className = "small mt-2 text-danger";
+                    moveFolderFeedback.textContent = data.error;
+                    show(moveFolderFeedback);
+                }
+            } catch (err) {
+                moveFolderFeedback.className = "small mt-2 text-danger";
+                moveFolderFeedback.textContent = `Move failed: ${err.message}`;
+                show(moveFolderFeedback);
+            } finally {
+                moveFolderConfirm.disabled = false;
+                moveFolderConfirm.innerHTML = '<i class="bi bi-folder-symlink me-1"></i>Move';
+            }
+        });
+    }
+
+    // Bulk move button
+    const bulkMoveBtn = $("#btn-bulk-move");
+    if (bulkMoveBtn) {
+        bulkMoveBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            const checked = document.querySelectorAll(".rec-checkbox:checked");
+            const names = Array.from(checked).map(cb => cb.dataset.name);
+            if (names.length > 0) openMoveFolderModal(names);
+        });
+    }
+
+    // Move single recording via right-click context or a dedicated button (we add a move button in action buttons area)
+    // We'll handle the "move" action from action buttons below
 
     const refreshBtn = $("#btn-refresh");
     if (refreshBtn) {
@@ -602,6 +1084,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (playBtn) {
             e.preventDefault();
             openAudioModal(playBtn.dataset.name);
+        }
+
+        // Move single recording button
+        const moveBtn = e.target.closest(".btn-move-recording");
+        if (moveBtn) {
+            e.preventDefault();
+            openMoveFolderModal([moveBtn.dataset.name]);
         }
     });
 

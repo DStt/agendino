@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS recording
     file_extension  TEXT    NOT NULL DEFAULT 'hda',
     recorded_at     TEXT    DEFAULT NULL,
     created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
-    transcript      TEXT    DEFAULT NULL
+    transcript      TEXT    DEFAULT NULL,
+    folder          TEXT    NOT NULL DEFAULT '/'
 );
 
 CREATE TABLE IF NOT EXISTS summary

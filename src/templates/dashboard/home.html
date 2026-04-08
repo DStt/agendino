@@ -159,40 +159,66 @@
                     <div class="row">
                         <div class="col-12">
                             <div class="card">
-                                <div class="card-header">
-                                    <h3 class="card-title">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h3 class="card-title mb-0">
                                         <i class="bi bi-mic me-1"></i> Recordings
                                     </h3>
-                                </div>
-                                <div class="card-body table-responsive p-0">
-                                    <div id="loading" class="text-center p-4">
-                                        <div class="spinner-border text-primary" role="status">
-                                            <span class="visually-hidden">Loading…</span>
-                                        </div>
-                                        <p class="mt-2 text-muted">Fetching recordings…</p>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <span id="folder-breadcrumb" class="text-muted small"></span>
                                     </div>
-                                    <div id="error-alert" class="alert alert-danger m-3 d-none" role="alert"></div>
-                                    <table class="table table-hover table-striped align-middle d-none" id="recordings-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Name</th>
-                                                <th>Date</th>
-                                                <th>Duration</th>
-                                                <th>Size</th>
-                                                <th class="text-center">Type</th>
-                                                <th class="text-center">Device</th>
-                                                <th class="text-center">Local</th>
-                                                <th class="text-center">DB</th>
-                                                <th>Title</th>
-                                                <th>Tags</th>
-                                                <th class="text-center">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="recordings-body"></tbody>
-                                    </table>
-                                    <div id="empty-state" class="text-center text-muted p-5 d-none">
-                                        <i class="bi bi-inbox" style="font-size:3rem"></i>
-                                        <p class="mt-2">No recordings found.</p>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="row g-0">
+                                        <!-- Folder tree sidebar -->
+                                        <div class="col-auto folder-sidebar" id="folder-sidebar">
+                                            <div class="folder-sidebar-header d-flex justify-content-between align-items-center">
+                                                <span class="fw-semibold small"><i class="bi bi-folder me-1"></i>Folders</span>
+                                                <button class="btn btn-sm btn-outline-primary" id="btn-create-folder" title="New folder">
+                                                    <i class="bi bi-folder-plus"></i>
+                                                </button>
+                                            </div>
+                                            <div id="folder-tree" class="folder-tree"></div>
+                                        </div>
+                                        <!-- Recordings table -->
+                                        <div class="col table-responsive">
+                                            <div id="loading" class="text-center p-4">
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="visually-hidden">Loading…</span>
+                                                </div>
+                                                <p class="mt-2 text-muted">Fetching recordings…</p>
+                                            </div>
+                                            <div id="error-alert" class="alert alert-danger m-3 d-none" role="alert"></div>
+                                            <table class="table table-hover table-striped align-middle d-none" id="recordings-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th><input type="checkbox" id="select-all-recordings" title="Select all"></th>
+                                                        <th>Name</th>
+                                                        <th>Date</th>
+                                                        <th>Duration</th>
+                                                        <th>Size</th>
+                                                        <th class="text-center">Type</th>
+                                                        <th class="text-center">Device</th>
+                                                        <th class="text-center">Local</th>
+                                                        <th class="text-center">DB</th>
+                                                        <th>Title</th>
+                                                        <th>Tags</th>
+                                                        <th class="text-center">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="recordings-body"></tbody>
+                                            </table>
+                                            <!-- Bulk actions bar -->
+                                            <div id="bulk-actions-bar" class="bulk-actions-bar d-none">
+                                                <span id="bulk-selected-count" class="small text-muted me-2"></span>
+                                                <button class="btn btn-sm btn-outline-primary" id="btn-bulk-move" title="Move selected recordings to folder">
+                                                    <i class="bi bi-folder-symlink me-1"></i>Move to…
+                                                </button>
+                                            </div>
+                                            <div id="empty-state" class="text-center text-muted p-5 d-none">
+                                                <i class="bi bi-inbox" style="font-size:3rem"></i>
+                                                <p class="mt-2">No recordings found.</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -444,6 +470,58 @@
                     <p class="mt-2 text-muted">Uploading…</p>
                 </div>
                 <div id="upload-result" class="d-none mt-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Move to Folder Modal -->
+    <div id="move-folder-modal-backdrop" class="transcript-modal-backdrop d-none">
+        <div class="transcript-modal" style="max-width: 450px;">
+            <div class="transcript-modal-header" style="background: var(--bs-primary);">
+                <h5 class="mb-0"><i class="bi bi-folder-symlink me-2"></i>Move to Folder</h5>
+                <button type="button" class="btn-close btn-close-white" id="move-folder-modal-close"></button>
+            </div>
+            <div class="transcript-modal-body">
+                <p class="text-muted small mb-2" id="move-folder-recording-name"></p>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Select folder</label>
+                    <div id="move-folder-tree" class="move-folder-tree"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Or type a new path</label>
+                    <input type="text" class="form-control form-control-sm" id="move-folder-path-input" placeholder="/projects/meetings">
+                </div>
+                <div class="text-end">
+                    <button class="btn btn-outline-secondary btn-sm me-2" id="move-folder-cancel">Cancel</button>
+                    <button class="btn btn-primary btn-sm" id="move-folder-confirm">
+                        <i class="bi bi-folder-symlink me-1"></i>Move
+                    </button>
+                </div>
+                <div id="move-folder-feedback" class="small mt-2 d-none"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create/Rename Folder Modal -->
+    <div id="folder-modal-backdrop" class="transcript-modal-backdrop d-none">
+        <div class="transcript-modal" style="max-width: 400px;">
+            <div class="transcript-modal-header" style="background: var(--bs-success);">
+                <h5 class="mb-0" id="folder-modal-title"><i class="bi bi-folder-plus me-2"></i>New Folder</h5>
+                <button type="button" class="btn-close btn-close-white" id="folder-modal-close"></button>
+            </div>
+            <div class="transcript-modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Folder path</label>
+                    <input type="text" class="form-control" id="folder-path-input" placeholder="/meetings/weekly">
+                    <div class="form-text">Use <code>/</code> to create nested folders, e.g. <code>/work/meetings</code></div>
+                </div>
+                <div class="text-end">
+                    <button class="btn btn-outline-secondary me-2" id="folder-modal-cancel">Cancel</button>
+                    <button class="btn btn-success" id="folder-modal-confirm">
+                        <i class="bi bi-check-lg me-1"></i>Create
+                    </button>
+                </div>
+                <div id="folder-modal-feedback" class="small mt-2 d-none"></div>
             </div>
         </div>
     </div>
