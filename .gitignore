@@ -4,3 +4,5 @@
 *.db
 /htmlcov/
 /settings/vector_store/
+/settings/sessions.json
+/settings/auth.json

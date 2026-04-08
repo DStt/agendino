@@ -17,6 +17,7 @@ from services.TaskGenerationService import TaskGenerationService
 from services.TranscriptionService import TranscriptionService
 from services.WhisperTranscriptionService import WhisperTranscriptionService
 from services.DailyRecapService import DailyRecapService
+from services.AuthService import AuthService
 from services.ICalSyncService import ICalSyncService
 from services.ProactorService import ProactorService
 
@@ -154,3 +155,8 @@ def get_rag_controller() -> RAGController:
         rag_service=get_rag_service(),
         template_path=os.path.join(get_root_path(), "src/templates/knowledge"),
     )
+
+
+def get_auth_service() -> AuthService:
+    return AuthService(settings_path=os.path.join(get_root_path(), "settings"))
+
