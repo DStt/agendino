@@ -5,7 +5,6 @@
 
 const CAL_API = "/api/calendar";
 
-const $ = (sel) => document.querySelector(sel);
 const show = (el) => { if (el) el.style.display = ""; el?.classList.remove("d-none"); };
 const hide = (el) => { if (el) el.classList.add("d-none"); };
 

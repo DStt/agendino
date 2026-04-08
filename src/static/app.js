@@ -1078,3 +1078,24 @@
     exports.initAccessibility = initAccessibility;
 
 }));
+
+const $ = (sel) => document.querySelector(sel);
+
+const LOGOUT_URL = "/api/auth/logout"
+const LOGIN_PAGE_URL = "/login"
+
+document.addEventListener("DOMContentLoaded", () => {
+
+    const logoutBtn = $("#btn-logout");
+    if (logoutBtn) {
+        logoutBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            fetch(LOGOUT_URL, { method: "POST" }).then(() => {
+                window.location.href = LOGIN_PAGE_URL;
+            }).catch(err => {
+                alert("Logout failed: " + err.message);
+            });
+
+        });
+    }
+});

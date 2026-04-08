@@ -23,10 +23,7 @@ const RECORDING_UPDATE_URL = "/api/dashboard/recording";
 const FOLDERS_URL = "/api/dashboard/folders";
 const MOVE_RECORDING_URL = "/api/dashboard/recording";
 const BULK_MOVE_URL = "/api/dashboard/recordings/move";
-const LOGOUT_URL = "/api/auth/logout"
-const LOGIN_PAGE_URL = "/login"
 
-const $ = (sel) => document.querySelector(sel);
 const show = (el) => el?.classList.remove("d-none");
 const hide = (el) => el?.classList.add("d-none");
 
@@ -816,19 +813,6 @@ document.addEventListener("DOMContentLoaded", () => {
             loadDashboard().finally(() => {
                 setTimeout(() => refreshBtn.querySelector("i").classList.remove("spin"), 600);
             });
-        });
-    }
-
-    const logoutBtn = $("#btn-logout");
-    if (logoutBtn) {
-        logoutBtn.addEventListener("click", (e) => {
-            e.preventDefault();
-            fetch(LOGOUT_URL, { method: "POST" }).then(() => {
-                window.location.href = LOGIN_PAGE_URL;
-            }).catch(err => {
-                alert("Logout failed: " + err.message);
-            });
-
         });
     }
 
