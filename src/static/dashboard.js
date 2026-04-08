@@ -1,5 +1,5 @@
 /**
- * Agendino Dashboard JS
+ * AgenDino Dashboard JS
  * Fetches recordings status from API and renders the table.
  * Device communication uses WebUSB via HiDockDevice (hidock-device.js).
  */

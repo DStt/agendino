@@ -1,5 +1,5 @@
 /**
- * Agendino Calendar JS
+ * AgenDino Calendar JS
  * Monthly calendar with day detail, event CRUD, and daily recap.
  */
 

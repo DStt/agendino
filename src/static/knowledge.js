@@ -1,5 +1,5 @@
 /**
- * Agendino Knowledge Base JS
+ * AgenDino Knowledge Base JS
  * Mind map visualisation, RAG Q&A, and semantic search.
  */
 (function () {
