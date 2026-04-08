@@ -16,6 +16,7 @@ class AuthService:
     def __init__(self, settings_path: str):
         self.credentials_file = os.path.join(settings_path, "auth.json")
         self.sessions_file = os.path.join(settings_path, "sessions.json")
+        self.banned_ips_file = os.path.join(settings_path, "banned_ips.json")
 
     # ── Password hashing ──────────────────────────────────────────
 
@@ -102,3 +103,29 @@ class AuthService:
         if token in sessions:
             del sessions[token]
             self._save_sessions(sessions)
+
+    # ── IP ban management (JSON file) ────────────────────────────
+
+    def _load_banned_ips(self) -> list[str]:
+        if not os.path.exists(self.banned_ips_file):
+            return []
+        try:
+            with open(self.banned_ips_file, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return []
+
+    def _save_banned_ips(self, ips: list[str]) -> None:
+        with open(self.banned_ips_file, "w") as f:
+            json.dump(ips, f, indent=2)
+
+    def is_ip_banned(self, ip: str) -> bool:
+        return ip in self._load_banned_ips()
+
+    def ban_ip(self, ip: str) -> None:
+        ips = self._load_banned_ips()
+        if ip not in ips:
+            ips.append(ip)
+            self._save_banned_ips(ips)
+            logger.warning("IP %s has been permanently banned", ip)
+

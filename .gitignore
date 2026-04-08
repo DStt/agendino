@@ -6,3 +6,4 @@
 /settings/vector_store/
 /settings/sessions.json
 /settings/auth.json
+/settings/banned_ips.json

@@ -17,8 +17,11 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/login")
-async def login(body: LoginRequest, auth_service: AuthService = Depends(depends.get_auth_service)):
+async def login(body: LoginRequest, request: Request, auth_service: AuthService = Depends(depends.get_auth_service)):
+    client_ip = request.client.host if request.client else "unknown"
+
     if not auth_service.authenticate(body.username, body.password):
+        auth_service.ban_ip(client_ip)
         return JSONResponse({"detail": "Invalid credentials"}, status_code=401)
 
     token = auth_service.create_session()

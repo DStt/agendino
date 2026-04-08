@@ -23,6 +23,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
+        # Block banned IPs immediately
+        client_ip = request.client.host if request.client else "unknown"
+        if self.auth_service.is_ip_banned(client_ip):
+            logger.warning("Blocked request from banned IP %s", client_ip)
+            return JSONResponse({"detail": "Forbidden"}, status_code=403)
+
         # Allow public paths through
         if path in PUBLIC_PATHS or any(path.startswith(p) for p in PUBLIC_PREFIXES):
             return await call_next(request)
