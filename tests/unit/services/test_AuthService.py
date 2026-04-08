@@ -97,4 +97,3 @@ class TestSessions:
         with open(os.path.join(auth_dir, "sessions.json")) as f:
             data = json.load(f)
         assert "old-token" not in data
-

@@ -252,4 +252,3 @@ async def bulk_move_recordings(
     dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
 ):
     return dashboard_controller.bulk_move_recordings(body.names, body.folder)
-

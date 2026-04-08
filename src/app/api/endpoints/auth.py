@@ -42,4 +42,3 @@ async def logout(request: Request, auth_service: AuthService = Depends(depends.g
     response = JSONResponse({"status": "ok"})
     response.delete_cookie(SESSION_COOKIE, path="/")
     return response
-

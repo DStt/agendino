@@ -57,7 +57,8 @@ class SqliteDBRepository:
         conn = self._connect()
         try:
             result = conn.execute(
-                "SELECT id, name, label, duration, file_extension, recorded_at, created_at, transcript, folder FROM recording"
+                "SELECT id, name, label, duration, file_extension, recorded_at, created_at, transcript, folder "
+                "FROM recording"
             )
             db_files = result.fetchall()
             recordings = [DBRecording.from_dict(row) for row in db_files]
@@ -406,7 +407,7 @@ class SqliteDBRepository:
                 (old_prefix + "%",),
             ).fetchall()
             for row in rows:
-                updated_folder = new_prefix + row["folder"][len(old_prefix):]
+                updated_folder = new_prefix + row["folder"][len(old_prefix) :]
                 conn.execute("UPDATE recording SET folder = ? WHERE id = ?", (updated_folder, row["id"]))
                 count += 1
             conn.commit()

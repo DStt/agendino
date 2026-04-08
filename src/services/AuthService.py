@@ -102,6 +102,3 @@ class AuthService:
         if token in sessions:
             del sessions[token]
             self._save_sessions(sessions)
-
-
-

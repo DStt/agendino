@@ -27,7 +27,9 @@ class RAGController:
         self._templates = Jinja2Templates(directory=template_path)
 
     def home(self, request: Request):
-        return self._templates.TemplateResponse(request=request, name="home.html")
+        return self._templates.TemplateResponse(
+            request=request, name="knowledge/home.html", context={"active_page": "knowledge"}
+        )
 
     @staticmethod
     def _parse_recording_datetime(bare_name: str) -> str | None:

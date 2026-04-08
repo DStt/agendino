@@ -40,6 +40,10 @@ def get_root_path() -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../")
 
 
+def get_template_path() -> str:
+    return os.path.join(get_root_path(), "src/templates")
+
+
 def get_sqlite_db_repository() -> SqliteDBRepository:
     _config = get_config()
     return SqliteDBRepository(
@@ -111,7 +115,7 @@ def get_dashboard_controller() -> DashboardController:
         summarization_service=get_summarization_service(),
         task_generation_service=get_task_generation_service(),
         system_prompts_repository=get_system_prompts_repository(),
-        template_path=os.path.join(get_root_path(), "src/templates/dashboard"),
+        template_path=get_template_path(),
         publish_services=_build_publish_services(),
         whisper_transcription_service=get_whisper_transcription_service(),
     )
@@ -120,7 +124,7 @@ def get_dashboard_controller() -> DashboardController:
 def get_calendar_controller() -> CalendarController:
     return CalendarController(
         sqlite_db_repository=get_sqlite_db_repository(),
-        template_path=os.path.join(get_root_path(), "src/templates/dashboard"),
+        template_path=get_template_path(),
         daily_recap_service=get_daily_recap_service(),
         ical_sync_service=ICalSyncService(),
     )
@@ -129,7 +133,7 @@ def get_calendar_controller() -> CalendarController:
 def get_proactor_controller() -> ProactorController:
     return ProactorController(
         sqlite_db_repository=get_sqlite_db_repository(),
-        template_path=os.path.join(get_root_path(), "src/templates/dashboard"),
+        template_path=get_template_path(),
         proactor_service=ProactorService(),
     )
 
@@ -153,10 +157,9 @@ def get_rag_controller() -> RAGController:
         sqlite_db_repository=get_sqlite_db_repository(),
         vector_store_repository=get_vector_store_repository(),
         rag_service=get_rag_service(),
-        template_path=os.path.join(get_root_path(), "src/templates/knowledge"),
+        template_path=get_template_path(),
     )
 
 
 def get_auth_service() -> AuthService:
     return AuthService(settings_path=os.path.join(get_root_path(), "settings"))
-

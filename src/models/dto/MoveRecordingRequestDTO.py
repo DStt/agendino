@@ -8,4 +8,3 @@ class MoveRecordingRequestDTO(BaseModel):
 class BulkMoveRecordingsRequestDTO(BaseModel):
     names: list[str]
     folder: str
-

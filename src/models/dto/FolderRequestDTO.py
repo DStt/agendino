@@ -13,4 +13,3 @@ class RenameFolderRequestDTO(BaseModel):
 class DeleteFolderRequestDTO(BaseModel):
     path: str
     move_to: str = "/"
-

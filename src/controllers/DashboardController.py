@@ -73,7 +73,9 @@ class DashboardController:
         return None
 
     def home(self, request: Request):
-        return self._templates.TemplateResponse(request=request, name="home.html")
+        return self._templates.TemplateResponse(
+            request=request, name="dashboard/home.html", context={"active_page": "dashboard"}
+        )
 
     def list_local_recordings(self):
         return self._local_recordings_repository.get_all()
@@ -685,4 +687,3 @@ class DashboardController:
             return {"ok": False, "error": "Cannot delete root folder"}
         count = self._sqlite_db_repository.delete_folder(normalized, move_to_normalized)
         return {"ok": True, "path": normalized, "moved_to": move_to_normalized, "moved_count": count}
-

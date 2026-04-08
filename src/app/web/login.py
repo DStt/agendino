@@ -12,4 +12,3 @@ _TEMPLATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../..
 async def login_page():
     with open(_TEMPLATE_PATH, "r") as f:
         return HTMLResponse(content=f.read())
-

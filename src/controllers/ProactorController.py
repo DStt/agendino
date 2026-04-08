@@ -23,7 +23,9 @@ class ProactorController:
     # ─── Web ──────────────────────────────────────────────────────
 
     def proactor_home(self, request: Request):
-        return self._templates.TemplateResponse(request=request, name="proactor.html")
+        return self._templates.TemplateResponse(
+            request=request, name="dashboard/proactor.html", context={"active_page": "proactor"}
+        )
 
     # ─── Analysis ─────────────────────────────────────────────────
 

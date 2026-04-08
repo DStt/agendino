@@ -32,7 +32,9 @@ class CalendarController:
 
     def calendar_home(self, request: Request):
         self._auto_sync_calendars()
-        return self._templates.TemplateResponse(request=request, name="calendar.html")
+        return self._templates.TemplateResponse(
+            request=request, name="dashboard/calendar.html", context={"active_page": "calendar"}
+        )
 
     def _auto_sync_calendars(self):
         try:

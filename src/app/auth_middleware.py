@@ -38,4 +38,3 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # Redirect browser requests to login
         return RedirectResponse(url="/login", status_code=302)
-
