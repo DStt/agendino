@@ -174,7 +174,7 @@
         $healthBadge.className = "proactor-health-badge " + h.cls;
 
         // Summary stats
-        $summaryTitle.textContent = `Schedule Analysis — ${data.start_date} to ${data.end_date}`;
+        $summaryTitle.textContent = `Schedule Analysis - ${data.start_date} to ${data.end_date}`;
         $summaryStats.innerHTML = [
             `<span><i class="bi bi-calendar-event me-1"></i>${s.total_events || 0} events</span>`,
             `<span><i class="bi bi-exclamation-triangle me-1"></i>${s.overlap_count || 0} overlaps</span>`,

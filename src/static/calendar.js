@@ -232,7 +232,7 @@ function renderDayEvents(events) {
         const location = ev.location ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${escapeHtml(ev.location)}</small>` : "";
         const meetingUrl = ev.meeting_url ? `<a href="${escapeHtml(ev.meeting_url)}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-camera-video me-1"></i>Join</a>` : "";
 
-        // Linked recordings — show as expandable cards
+        // Linked recordings - show as expandable cards
         const linkedRecs = (ev.linked_recordings || []).map(lr => {
             const preview = lr.summary_text ? escapeHtml(lr.summary_text.substring(0, 120).replace(/\n/g, " ")) + (lr.summary_text.length > 120 ? "…" : "") : "";
             const tags = (lr.summary_tags || []).map(t =>
@@ -312,7 +312,7 @@ function renderDayRecordings(recordings) {
         const badges = [];
         if (rec.has_transcript) badges.push('<span class="badge bg-success-subtle text-success-emphasis">Transcript</span>');
         if (rec.has_summary) badges.push('<span class="badge bg-info-subtle text-info-emphasis">Summary</span>');
-        const title = rec.summary_title ? ` — ${escapeHtml(rec.summary_title)}` : "";
+        const title = rec.summary_title ? ` - ${escapeHtml(rec.summary_title)}` : "";
         const tags = (rec.summary_tags || []).map(t =>
             `<span class="badge bg-secondary bg-opacity-25 text-body me-1">${escapeHtml(t)}</span>`
         ).join("");
@@ -888,7 +888,7 @@ document.addEventListener("click", (e) => {
     dd.className = "link-rec-dropdown";
     dd.innerHTML = `<div class="link-rec-header">Link a recording</div>` +
         available.map(r => {
-            const t = r.summary_title ? ` — ${escapeHtml(r.summary_title)}` : "";
+            const t = r.summary_title ? ` - ${escapeHtml(r.summary_title)}` : "";
             return `<div class="link-rec-item" data-recording-id="${r.recording_id}" data-event-id="${eventId}">
                 <i class="bi bi-mic me-1 text-success"></i>${escapeHtml(r.name)}${t}
             </div>`;

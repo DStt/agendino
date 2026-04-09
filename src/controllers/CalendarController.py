@@ -22,18 +22,22 @@ class CalendarController:
         template_path: str,
         daily_recap_service: DailyRecapService | None = None,
         ical_sync_service: ICalSyncService | None = None,
+        auth_enabled: bool = False,
     ):
         self._sqlite_db_repository = sqlite_db_repository
         self._templates = Jinja2Templates(directory=template_path)
         self._daily_recap_service = daily_recap_service
         self._ical_sync_service = ical_sync_service or ICalSyncService()
+        self._auth_enabled = auth_enabled
 
     # ─── Web ──────────────────────────────────────────────────────
 
     def calendar_home(self, request: Request):
         self._auto_sync_calendars()
         return self._templates.TemplateResponse(
-            request=request, name="dashboard/calendar.html", context={"active_page": "calendar"}
+            request=request,
+            name="dashboard/calendar.html",
+            context={"active_page": "calendar", "auth_enabled": self._auth_enabled},
         )
 
     def _auto_sync_calendars(self):

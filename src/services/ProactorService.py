@@ -1,7 +1,7 @@
 """Proactive calendar analysis service.
 
 Detects scheduling issues like overlapping events, back-to-back meetings,
-gaps, and overloaded days — all pure logic, no AI required.
+gaps, and overloaded days - all pure logic, no AI required.
 """
 
 from __future__ import annotations
@@ -89,7 +89,7 @@ def _overlap_severity(minutes: float) -> str:
 
 
 class ProactorService:
-    """Stateless service — all methods accept pre-fetched event dicts."""
+    """Stateless service - all methods accept pre-fetched event dicts."""
 
     # ── Overlaps ─────────────────────────────────────────────────
     @staticmethod

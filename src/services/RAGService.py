@@ -12,8 +12,8 @@ clean, hierarchical mind map.
 
 RULES
 1. The map has exactly THREE depth levels: central_topic → branches → children.
-2. Create 3-7 branches — each is a distinct high-level THEME.
-3. Each branch has 2-5 children — each is one concrete KEY INSIGHT from the summaries.
+2. Create 3-7 branches - each is a distinct high-level THEME.
+3. Each branch has 2-5 children - each is one concrete KEY INSIGHT from the summaries.
 4. Labels must be SHORT: max 4 words for branches, max 6 words for children.
 5. Every child MUST include `summary_ids` (array of source summary IDs).
 6. Add `connections` only for genuinely cross-cutting relationships (max 3).

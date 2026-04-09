@@ -12,11 +12,13 @@
 {% endblock %}
 
 {% block navbar_items %}
-<li>
-                        <a class="nav-link" href="#" id="btn-logout" role="button" title="Logout">
-                            <i class="bi bi-box-arrow-right"></i> Logout
-                        </a>
-                    </li>
+{% if auth_enabled %}
+    <li>
+        <a class="nav-link" href="#" id="btn-logout" role="button" title="Logout">
+            <i class="bi bi-box-arrow-right"></i> Logout
+        </a>
+    </li>
+{% endif %}
 {% endblock %}
 
 {% block page_header %}Knowledge Base{% endblock %}
@@ -27,7 +29,7 @@
                         <div class="col-lg-4 col-6">
                             <div class="small-box text-bg-primary">
                                 <div class="inner">
-                                    <h3 id="stat-total">—</h3>
+                                    <h3 id="stat-total">-</h3>
                                     <p>Total Summaries</p>
                                 </div>
                                 <div class="icon"><i class="bi bi-journal-text"></i></div>
@@ -36,7 +38,7 @@
                         <div class="col-lg-4 col-6">
                             <div class="small-box text-bg-success">
                                 <div class="inner">
-                                    <h3 id="stat-loaded">—</h3>
+                                    <h3 id="stat-loaded">-</h3>
                                     <p>In Vector Store</p>
                                 </div>
                                 <div class="icon"><i class="bi bi-database-check"></i></div>
@@ -196,11 +198,11 @@
 {% endblock %}
 
 {% block modals %}
-<!-- AI Mind Map Modal — Step 1: Summary Picker -->
+<!-- AI Mind Map Modal - Step 1: Summary Picker -->
     <div id="ai-picker-backdrop" class="transcript-modal-backdrop d-none">
         <div class="transcript-modal" style="max-width: 650px;">
             <div class="transcript-modal-header" style="background: var(--bs-warning); color: var(--bs-dark);">
-                <h5 class="mb-0"><i class="bi bi-stars me-2"></i>AI Mind Map — Select Summaries</h5>
+                <h5 class="mb-0"><i class="bi bi-stars me-2"></i>AI Mind Map - Select Summaries</h5>
                 <button type="button" class="btn-close" id="ai-picker-close"></button>
             </div>
             <div class="transcript-modal-body">
@@ -225,7 +227,7 @@
         </div>
     </div>
 
-    <!-- AI Mind Map Modal — Step 2: Visualization -->
+    <!-- AI Mind Map Modal - Step 2: Visualization -->
     <div id="ai-mindmap-modal-backdrop" class="transcript-modal-backdrop d-none">
         <div class="transcript-modal" style="max-width: 92vw; max-height: 92vh;">
             <div class="transcript-modal-header" style="background: var(--bs-warning); color: var(--bs-dark);">
@@ -253,7 +255,7 @@
     <div id="summary-detail-backdrop" class="transcript-modal-backdrop d-none">
         <div class="transcript-modal">
             <div class="transcript-modal-header" style="background: var(--bs-info);">
-                <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>Summary — <span id="summary-detail-name"></span></h5>
+                <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>Summary - <span id="summary-detail-name"></span></h5>
                 <button type="button" class="btn-close btn-close-white" id="summary-detail-close"></button>
             </div>
             <div class="transcript-modal-body">

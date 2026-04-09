@@ -58,7 +58,7 @@
     color: var(--bs-primary);
 }
 
-/* Native tooltip styling hint — works via title attr */
+/* Native tooltip styling hint - works via title attr */
 .proactor-help-icon[title] {
     text-decoration: none;
 }

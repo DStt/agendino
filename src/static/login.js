@@ -1,5 +1,5 @@
 /**
- * AgenDino — Login page logic
+ * AgenDino - Login page logic
  */
 (function () {
     "use strict";

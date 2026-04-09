@@ -16,8 +16,8 @@ actionable tasks that could be added to a Jira board.
 Rules:
 1. Each task must have a clear, concise **title** (suitable as a Jira ticket title).
 2. Each task must have a **description** explaining what needs to be done.
-3. If a task is too broad or large in scope, break it into **subtasks** — each subtask also has a title and description.
-4. Focus on concrete, actionable items — NOT vague goals.
+3. If a task is too broad or large in scope, break it into **subtasks** - each subtask also has a title and description.
+4. Focus on concrete, actionable items - NOT vague goals.
 5. Use the same language as the summary.
 
 You MUST respond with a valid JSON array of task objects:

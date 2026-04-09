@@ -6,7 +6,7 @@ from services.SummarizationService import SummarizationService
 
 
 class TestSummarizationServiceParseResponse:
-    """Unit tests for _parse_response (static method — no API key needed)."""
+    """Unit tests for _parse_response (static method - no API key needed)."""
 
     def test_valid_json(self):
         raw = json.dumps(
@@ -89,7 +89,7 @@ class TestSummarizationServiceParseResponse:
         assert result["summary"] == "Body"
 
     def test_malformed_json_repaired(self):
-        # Missing closing brace — json_repair should fix it
+        # Missing closing brace - json_repair should fix it
         raw = '{"title": "Broken", "tags": ["a"], "summary": "Text"'
         result = SummarizationService._parse_response(raw)
         assert result["title"] == "Broken"

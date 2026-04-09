@@ -26,6 +26,10 @@ load_dotenv()
 config = {}
 
 
+def is_auth_enabled() -> bool:
+    return os.getenv("AUTH_ENABLED", "false").lower() in ("true", "1", "yes")
+
+
 def get_config():
     if config.get("init", False):
         return config
@@ -118,6 +122,7 @@ def get_dashboard_controller() -> DashboardController:
         template_path=get_template_path(),
         publish_services=_build_publish_services(),
         whisper_transcription_service=get_whisper_transcription_service(),
+        auth_enabled=is_auth_enabled(),
     )
 
 
@@ -127,6 +132,7 @@ def get_calendar_controller() -> CalendarController:
         template_path=get_template_path(),
         daily_recap_service=get_daily_recap_service(),
         ical_sync_service=ICalSyncService(),
+        auth_enabled=is_auth_enabled(),
     )
 
 
@@ -135,6 +141,7 @@ def get_proactor_controller() -> ProactorController:
         sqlite_db_repository=get_sqlite_db_repository(),
         template_path=get_template_path(),
         proactor_service=ProactorService(),
+        auth_enabled=is_auth_enabled(),
     )
 
 
@@ -158,6 +165,7 @@ def get_rag_controller() -> RAGController:
         vector_store_repository=get_vector_store_repository(),
         rag_service=get_rag_service(),
         template_path=get_template_path(),
+        auth_enabled=is_auth_enabled(),
     )
 
 

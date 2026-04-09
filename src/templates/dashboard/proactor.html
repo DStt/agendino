@@ -8,20 +8,22 @@
 
 {% block navbar_items %}
 <li class="nav-item">
-                        <a class="nav-link" href="#" id="btn-this-week" role="button" title="Analyze this week">
-                            <i class="bi bi-calendar-week"></i> This Week
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" id="btn-next-week" role="button" title="Analyze next week">
-                            <i class="bi bi-calendar-plus"></i> Next Week
-                        </a>
-                    </li>
-                    <li>
-                        <a class="nav-link" href="#" id="btn-logout" role="button" title="Logout">
-                            <i class="bi bi-box-arrow-right"></i> Logout
-                        </a>
-                    </li>
+    <a class="nav-link" href="#" id="btn-this-week" role="button" title="Analyze this week">
+        <i class="bi bi-calendar-week"></i> This Week
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link" href="#" id="btn-next-week" role="button" title="Analyze next week">
+        <i class="bi bi-calendar-plus"></i> Next Week
+    </a>
+</li>
+{% if auth_enabled %}
+<li>
+    <a class="nav-link" href="#" id="btn-logout" role="button" title="Logout">
+        <i class="bi bi-box-arrow-right"></i> Logout
+    </a>
+</li>
+{% endif %}
 {% endblock %}
 
 {% block page_header %}<i class="bi bi-shield-check me-2"></i>Proactor{% endblock %}
@@ -64,7 +66,7 @@
                             <div class="card" id="summary-card">
                                 <div class="card-body">
                                     <div class="d-flex align-items-center gap-3 flex-wrap">
-                                        <div id="health-badge" class="proactor-health-badge">—</div>
+                                        <div id="health-badge" class="proactor-health-badge">-</div>
                                         <div class="flex-grow-1">
                                             <h5 class="mb-1" id="summary-title">Schedule Analysis</h5>
                                             <div class="d-flex flex-wrap gap-3 text-muted small" id="summary-stats"></div>
@@ -140,7 +142,7 @@
                         </div>
                     </div>
 
-                    <!-- Free Slots — Timeline View -->
+                    <!-- Free Slots - Timeline View -->
                     <div class="row mb-4 d-none" id="gaps-row">
                         <div class="col-12">
                             <div class="card">

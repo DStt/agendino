@@ -128,4 +128,3 @@ class AuthService:
             ips.append(ip)
             self._save_banned_ips(ips)
             logger.warning("IP %s has been permanently banned", ip)
-

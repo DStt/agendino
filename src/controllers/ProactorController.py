@@ -15,16 +15,20 @@ class ProactorController:
         sqlite_db_repository: SqliteDBRepository,
         template_path: str,
         proactor_service: ProactorService | None = None,
+        auth_enabled: bool = False,
     ):
         self._sqlite_db_repository = sqlite_db_repository
         self._templates = Jinja2Templates(directory=template_path)
         self._proactor_service = proactor_service or ProactorService()
+        self._auth_enabled = auth_enabled
 
     # ─── Web ──────────────────────────────────────────────────────
 
     def proactor_home(self, request: Request):
         return self._templates.TemplateResponse(
-            request=request, name="dashboard/proactor.html", context={"active_page": "proactor"}
+            request=request,
+            name="dashboard/proactor.html",
+            context={"active_page": "proactor", "auth_enabled": self._auth_enabled},
         )
 
     # ─── Analysis ─────────────────────────────────────────────────
@@ -35,7 +39,7 @@ class ProactorController:
             datetime.strptime(start_date, "%Y-%m-%d")
             datetime.strptime(end_date, "%Y-%m-%d")
         except ValueError:
-            return {"ok": False, "error": "Invalid date format — use YYYY-MM-DD"}
+            return {"ok": False, "error": "Invalid date format - use YYYY-MM-DD"}
 
         if start_date > end_date:
             return {"ok": False, "error": "start_date must be before end_date"}

@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 TRANSCRIPTION_PROMPT = """\
 Transcribe the following audio recording accurately and completely.
-Use the language spoken in the audio — do NOT translate.
+Use the language spoken in the audio - do NOT translate.
 
 Rules:
 - Identify distinct speakers and label them as Speaker 1, Speaker 2, etc.

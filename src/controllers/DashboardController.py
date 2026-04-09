@@ -41,6 +41,7 @@ class DashboardController:
         template_path: str,
         publish_services: dict[str, object] | None = None,
         whisper_transcription_service: WhisperTranscriptionService | None = None,
+        auth_enabled: bool = False,
     ):
         self._sqlite_db_repository = sqlite_db_repository
         self._local_recordings_repository = local_recordings_repository
@@ -51,6 +52,7 @@ class DashboardController:
         self._templates = Jinja2Templates(directory=template_path)
         self._publish_services: dict[str, object] = publish_services or {}
         self._whisper_transcription_service = whisper_transcription_service
+        self._auth_enabled = auth_enabled
 
     @staticmethod
     def _bare_name(name: str) -> str:
@@ -74,7 +76,9 @@ class DashboardController:
 
     def home(self, request: Request):
         return self._templates.TemplateResponse(
-            request=request, name="dashboard/home.html", context={"active_page": "dashboard"}
+            request=request,
+            name="dashboard/home.html",
+            context={"active_page": "dashboard", "auth_enabled": self._auth_enabled},
         )
 
     def list_local_recordings(self):
@@ -376,7 +380,7 @@ class DashboardController:
 
         transcript = self._sqlite_db_repository.get_transcript(bare_name)
         if not transcript:
-            return {"ok": False, "error": "No transcript found — transcribe the recording first"}
+            return {"ok": False, "error": "No transcript found - transcribe the recording first"}
 
         prompt_content = self._system_prompts_repository.get_prompt_content(prompt_id)
         if not prompt_content:
@@ -520,10 +524,10 @@ class DashboardController:
         bare_name = self._bare_name(name)
         db_rec = self._sqlite_db_repository.get_recording_by_name(bare_name)
         if not db_rec:
-            return {"ok": False, "error": "No summary found — summarize the recording first"}
+            return {"ok": False, "error": "No summary found - summarize the recording first"}
         summaries = self._sqlite_db_repository.get_summaries(bare_name)
         if not summaries:
-            return {"ok": False, "error": "No summary found — summarize the recording first"}
+            return {"ok": False, "error": "No summary found - summarize the recording first"}
         return self.publish_summary(summaries[0].id, destination)
 
     def publish_summary(self, summary_id: int, destination: str) -> dict:
@@ -565,7 +569,7 @@ class DashboardController:
             return {"ok": False, "error": f"Summary '{summary_id}' not found"}
 
         if not summary.summary or not summary.summary.strip():
-            return {"ok": False, "error": "Summary is empty — cannot generate tasks"}
+            return {"ok": False, "error": "Summary is empty - cannot generate tasks"}
 
         # Delete existing tasks for this summary (regeneration replaces old ones)
         self._sqlite_db_repository.delete_tasks_by_summary(summary_id)
@@ -645,11 +649,11 @@ class DashboardController:
         return {"ok": True, "folders": folders}
 
     def create_folder(self, path: str) -> dict:
-        """Create a folder (virtual — just validate the path)."""
+        """Create a folder (virtual - just validate the path)."""
         normalized = self._normalize_folder_path(path)
         if normalized == "/":
             return {"ok": False, "error": "Cannot create root folder"}
-        # Folders are implicit — they exist as long as a recording uses them.
+        # Folders are implicit - they exist as long as a recording uses them.
         # We return success; the folder will appear once a recording is moved there.
         return {"ok": True, "path": normalized}
 

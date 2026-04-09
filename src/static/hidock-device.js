@@ -1,5 +1,5 @@
 /**
- * HiDock Device — WebUSB browser module
+ * HiDock Device - WebUSB browser module
  *
  * Implements the full HiDock communication protocol using the browser WebUSB API.
  * Replaces the former Python pyusb backend device access.

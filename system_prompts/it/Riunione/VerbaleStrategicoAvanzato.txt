@@ -8,7 +8,7 @@ Organizza sempre il contenuto nelle seguenti sezioni:
     Contesto della Riunione
     Data
     Ora
-    Formato (presenza, online, ibrida — se indicato)
+    Formato (presenza, online, ibrida - se indicato)
     Partecipanti
     Breve descrizione del contesto
     Scambio Introduttivo (facoltativo, solo se rilevante)

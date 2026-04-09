@@ -302,7 +302,7 @@
         }
     }
 
-    /* ── AI Mind Map — Step 1: Summary Picker ── */
+    /* ── AI Mind Map - Step 1: Summary Picker ── */
     let pickerSummaries = [];
 
     async function openAIPicker() {
@@ -368,7 +368,7 @@
         return Array.from(checked).map(cb => parseInt(cb.value, 10));
     }
 
-    /* ── AI Mind Map — Step 2: Generate & Render ── */
+    /* ── AI Mind Map - Step 2: Generate & Render ── */
     async function generateAIMindMap() {
         const ids = getSelectedSummaryIds();
         hide($('ai-picker-backdrop'));
@@ -652,7 +652,7 @@
                         const meta = r.metadata || {};
                         const similarity = r.distance !== null && r.distance !== undefined
                             ? (1 - r.distance).toFixed(3)
-                            : '—';
+                            : '-';
 
                         const tagsHtml = meta.tags
                             ? meta.tags.split(',')

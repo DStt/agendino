@@ -11,7 +11,7 @@ MAX_OUTPUT_TOKENS = 65536
 
 STRUCTURED_INSTRUCTIONS = """
 
-IMPORTANT — In addition to the summary, you MUST also return:
+IMPORTANT - In addition to the summary, you MUST also return:
 1. A short descriptive **title** for this recording (max 10 words, suitable as a label).
 2. A list of **tags** (3-8 keyword tags) to categorize the content of the recording.
 
@@ -81,7 +81,7 @@ class SummarizationService:
                 tags = [t.strip() for t in str(tags_raw).split(",") if t.strip()]
             summary = data.get("summary", "").strip()
             if truncated and summary:
-                summary += "\n\n> ⚠️ *This summary may be incomplete — the AI response was truncated.*"
+                summary += "\n\n> ⚠️ *This summary may be incomplete - the AI response was truncated.*"
             return {"title": title, "tags": tags, "summary": summary}
 
         # 1. Try strict JSON parse first

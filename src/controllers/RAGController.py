@@ -20,15 +20,19 @@ class RAGController:
         vector_store_repository: VectorStoreRepository,
         rag_service: RAGService,
         template_path: str,
+        auth_enabled: bool = False,
     ):
         self._sqlite_db_repository = sqlite_db_repository
         self._vector_store = vector_store_repository
         self._rag_service = rag_service
         self._templates = Jinja2Templates(directory=template_path)
+        self._auth_enabled = auth_enabled
 
     def home(self, request: Request):
         return self._templates.TemplateResponse(
-            request=request, name="knowledge/home.html", context={"active_page": "knowledge"}
+            request=request,
+            name="knowledge/home.html",
+            context={"active_page": "knowledge", "auth_enabled": self._auth_enabled},
         )
 
     @staticmethod

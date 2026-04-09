@@ -49,7 +49,7 @@ class NotionService:
             if clean:
                 meta_parts.append(f"🏷️ {', '.join(clean)}")
         if meta_parts:
-            children.append(self._callout_block(" — ".join(meta_parts)))
+            children.append(self._callout_block(" - ".join(meta_parts)))
             children.append(self._divider_block())
 
         children.extend(self._markdown_to_blocks(summary_markdown))

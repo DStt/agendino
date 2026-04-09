@@ -34,14 +34,14 @@ let _allRecordings = [];     // all recordings from last fetch
 let _allFolders = [];        // all folder paths from last fetch
 
 function formatDuration(seconds) {
-    if (seconds == null) return "—";
+    if (seconds == null) return "-";
     const m = Math.floor(seconds / 60);
     const s = Math.round(seconds % 60);
     return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 function formatSize(bytes) {
-    if (bytes == null) return "—";
+    if (bytes == null) return "-";
     if (bytes < 1024) return `${bytes} B`;
     const kb = bytes / 1024;
     if (kb < 1024) return `${kb.toFixed(1)} KB`;
@@ -84,11 +84,11 @@ function actionButtons(rec) {
     if (rec.on_device || rec.on_local || rec.in_db) {
         btns.push(`<button class="btn btn-sm btn-outline-danger btn-delete-recording" data-name="${rec.name}" data-on-device="${rec.on_device}" data-on-local="${rec.on_local}" data-in-db="${rec.in_db}" title="Delete recording…"><i class="bi bi-trash3"></i></button>`);
     }
-    return btns.join(" ") || '<span class="text-muted">—</span>';
+    return btns.join(" ") || '<span class="text-muted">-</span>';
 }
 
 function renderTags(tags) {
-    if (!tags || tags.length === 0) return '<span class="text-muted">—</span>';
+    if (!tags || tags.length === 0) return '<span class="text-muted">-</span>';
     return tags
         .map(t => `<span class="badge bg-secondary bg-opacity-25 text-body me-1 mb-1">${t}</span>`)
         .join("");
@@ -110,7 +110,7 @@ function fileTypeBadge(ext) {
 }
 
 function renderRow(rec) {
-    const dateStr = rec.date && rec.time ? `${rec.date} ${rec.time}` : (rec.date || "—");
+    const dateStr = rec.date && rec.time ? `${rec.date} ${rec.time}` : (rec.date || "-");
     const dateCell = rec.in_db
         ? `<span class="editable-date" role="button" data-name="${rec.name}" data-recorded-at="${rec.recorded_at || ""}" title="Click to edit date/time">${dateStr} <i class="bi bi-pencil-square small text-muted"></i></span>`
         : dateStr;
@@ -118,7 +118,7 @@ function renderRow(rec) {
     if (rec.db_title && rec.notion_url) {
         titleStr = `<a href="${rec.notion_url}" target="_blank" rel="noopener" class="text-decoration-none" title="Open in Notion">${rec.db_title} <i class="bi bi-box-arrow-up-right small text-muted"></i></a>`;
     } else {
-        titleStr = rec.db_title || '<span class="text-muted">—</span>';
+        titleStr = rec.db_title || '<span class="text-muted">-</span>';
     }
     const titleCell = rec.summary_count > 1 ? `${titleStr} <span class="badge bg-info-subtle text-info-emphasis ms-1">v${rec.summary_count}</span>` : titleStr;
     return `<tr>
@@ -599,7 +599,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         show(folderModalFeedback);
                     }
                 } else {
-                    // "Create" — just add it to the tree. The folder is implicit.
+                    // "Create" - just add it to the tree. The folder is implicit.
                     const res = await fetch(FOLDERS_URL, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -905,7 +905,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     alert.innerHTML = msg;
                 } else if (skipped.length > 0 && errors.length === 0) {
                     alert.className = "alert alert-info";
-                    alert.innerHTML = `<i class="bi bi-info-circle me-1"></i> All ${skipped.length} file(s) already synced — nothing new to download.`;
+                    alert.innerHTML = `<i class="bi bi-info-circle me-1"></i> All ${skipped.length} file(s) already synced - nothing new to download.`;
                 } else if (errors.length > 0) {
                     alert.className = "alert alert-danger";
                     let msg = `<i class="bi bi-exclamation-triangle me-1"></i> Sync failed: ${errors.join("; ")}`;
@@ -1287,7 +1287,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Transcribe button (main button — default engine) & engine menu item
+    // Transcribe button (main button - default engine) & engine menu item
     document.addEventListener("click", async (e) => {
         // Engine menu item clicked
         const engineItem = e.target.closest(".btn-transcribe-engine");

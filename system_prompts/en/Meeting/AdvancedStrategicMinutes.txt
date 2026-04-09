@@ -8,7 +8,7 @@ Always organize the content into the following sections:
     Meeting Context
     Date
     Time
-    Format (in-person, online, hybrid — if indicated)
+    Format (in-person, online, hybrid - if indicated)
     Participants
     Brief description of the context
     Introductory Exchange (optional, only if relevant)
