@@ -31,7 +31,7 @@ class WhisperTranscriptionService:
             logger.info("Whisper model loaded.")
         return self._model
 
-    def transcribe(self, audio_path: str) -> str:
+    def transcribe(self, audio_path: str, mime_type: str = "audio/mpeg") -> str:
         """Transcribe an audio file locally with Whisper and return formatted text."""
         path = Path(audio_path)
         if not path.exists():
