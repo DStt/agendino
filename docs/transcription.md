@@ -2,7 +2,6 @@
 
 Convert audio recordings to text using cloud-based (Gemini) or local (Whisper) speech-to-text engines.
 
-<!-- TODO: Add screenshot -->
 ![Transcription](screenshots/transcription.png)
 
 ---

@@ -2,7 +2,6 @@
 
 Publish summaries as rich sub-pages under a Notion parent page.
 
-<!-- TODO: Add screenshot -->
 ![Notion Publishing](screenshots/notion-publishing.png)
 
 ---

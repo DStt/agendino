@@ -2,7 +2,6 @@
 
 Optional single-user login system with session cookies and IP banning.
 
-<!-- TODO: Add screenshot -->
 ![Authentication](screenshots/authentication.png)
 
 ---

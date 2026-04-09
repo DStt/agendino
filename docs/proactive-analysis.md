@@ -2,7 +2,6 @@
 
 Analyze your calendar for scheduling issues across a date range with visual timelines and a health score.
 
-<!-- TODO: Add screenshot -->
 ![Proactive Analysis](screenshots/proactive-analysis.png)
 
 ---

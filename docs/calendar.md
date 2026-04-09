@@ -2,7 +2,6 @@
 
 Built-in calendar with manual events, shared calendar subscriptions (iCal), and recording-event linking.
 
-<!-- TODO: Add screenshot -->
 ![Calendar](screenshots/calendar.png)
 
 ---

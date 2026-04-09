@@ -5,7 +5,6 @@
 
 AgenDino is a web-based dashboard for managing, transcribing, and summarizing audio recordings from [HiDock](https://www.hidock.com/) USB devices. It uses Google Gemini and local Whisper for AI-powered transcription, summarization, task extraction, and knowledge retrieval - all from a single self-hosted interface.
 
-<!-- TODO: Add screenshot -->
 ![Dashboard](docs/screenshots/dashboard.png)
 
 ## Features

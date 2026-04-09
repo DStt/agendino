@@ -2,7 +2,6 @@
 
 Automatically extract actionable tasks from meeting summaries using Gemini.
 
-<!-- TODO: Add screenshot -->
 ![Task Generation](screenshots/task-generation.png)
 
 ---

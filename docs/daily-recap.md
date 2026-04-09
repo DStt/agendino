@@ -2,7 +2,6 @@
 
 Generate an AI-powered end-of-day narrative from all calendar events and meeting summaries for a given date.
 
-<!-- TODO: Add screenshot -->
 ![Daily Recap](screenshots/daily-recap.png)
 
 ---

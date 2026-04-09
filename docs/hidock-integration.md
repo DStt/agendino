@@ -2,7 +2,6 @@
 
 Connect and sync recordings directly from HiDock H1, H1E, and P1 devices over USB.
 
-<!-- TODO: Add screenshot -->
 ![HiDock Integration](screenshots/hidock-integration.png)
 
 ---

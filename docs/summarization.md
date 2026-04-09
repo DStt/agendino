@@ -2,7 +2,6 @@
 
 Generate structured AI summaries from transcripts using Google Gemini with customizable system prompts.
 
-<!-- TODO: Add screenshot -->
 ![Summarization](screenshots/summarization.png)
 
 ---

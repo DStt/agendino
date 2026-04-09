@@ -2,7 +2,6 @@
 
 Upload, organize, play back, and manage audio recordings from the web dashboard.
 
-<!-- TODO: Add screenshot -->
 ![Recording Management](screenshots/recording-management.png)
 
 ---

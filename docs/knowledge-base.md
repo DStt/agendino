@@ -2,7 +2,6 @@
 
 Retrieval-Augmented Generation (RAG) for searching and querying your meeting knowledge, plus interactive mind maps.
 
-<!-- TODO: Add screenshot -->
 ![Knowledge Base](screenshots/knowledge-base.png)
 
 ---
@@ -48,7 +47,6 @@ Click **Clear** to reset the vector store and re-index from scratch. Useful afte
 
 Visualize connections across summaries as an interactive graph.
 
-<!-- TODO: Add screenshot -->
 ![Mind Map](screenshots/mind-map.png)
 
 ### Tag-Based Mode (Default)
