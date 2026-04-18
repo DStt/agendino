@@ -16,6 +16,7 @@ class SqliteDBRepository:
         if not os.path.exists(self._db_path):
             self._initialize_db(init_sql_script)
         self._ensure_recording_columns()
+        self._ensure_cost_tracking_tables()
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path)
@@ -30,6 +31,57 @@ class SqliteDBRepository:
         conn.executescript(sql)
         conn.commit()
         conn.close()
+
+    def _ensure_cost_tracking_tables(self) -> None:
+        """Migration: create cost_tracking and comparison tables if missing."""
+        conn = self._connect()
+        try:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS cost_tracking (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recording_id INTEGER REFERENCES recording(id) ON DELETE CASCADE,
+                    operation TEXT NOT NULL,
+                    engine TEXT NOT NULL,
+                    model TEXT,
+                    input_units REAL,
+                    output_units REAL,
+                    cost_usd REAL NOT NULL,
+                    estimated INTEGER DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_cost_tracking_recording ON cost_tracking (recording_id);
+                CREATE INDEX IF NOT EXISTS idx_cost_tracking_operation ON cost_tracking (operation);
+
+                CREATE TABLE IF NOT EXISTS comparison_run (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recording_id INTEGER REFERENCES recording(id) ON DELETE CASCADE,
+                    run_type TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE TABLE IF NOT EXISTS comparison_result (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id INTEGER NOT NULL REFERENCES comparison_run(id) ON DELETE CASCADE,
+                    engine TEXT NOT NULL,
+                    model TEXT,
+                    system_prompt_id TEXT,
+                    output_text TEXT NOT NULL,
+                    cost_usd REAL DEFAULT 0.0,
+                    processing_time_ms INTEGER
+                );
+                CREATE INDEX IF NOT EXISTS idx_comparison_result_run ON comparison_result (run_id);
+                CREATE TABLE IF NOT EXISTS comparison_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id INTEGER NOT NULL REFERENCES comparison_run(id) ON DELETE CASCADE,
+                    segment_index INTEGER,
+                    preferred_result_id INTEGER REFERENCES comparison_result(id),
+                    notes TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_comparison_feedback_run ON comparison_feedback (run_id);
+            """)
+            conn.commit()
+        finally:
+            conn.close()
 
     def _ensure_recording_columns(self) -> None:
         """Migration: add file_extension, recorded_at, and folder columns if missing on existing DB."""
