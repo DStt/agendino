@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}Stats{% endblock %}
+{% block page_header %}API Usage & Costs{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Summary Cards -->
+<div class="row mb-4" id="stats-cards">
+    <div class="col-lg-3 col-6">
+        <div class="small-box text-bg-primary">
+            <div class="inner">
+                <h3 id="stat-total-cost">$-</h3>
+                <p>Total Spend</p>
+            </div>
+            <div class="icon"><i class="bi bi-currency-dollar"></i></div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box text-bg-success">
+            <div class="inner">
+                <h3 id="stat-transcriptions">-</h3>
+                <p>Transcriptions</p>
+            </div>
+            <div class="icon"><i class="bi bi-mic"></i></div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box text-bg-warning">
+            <div class="inner">
+                <h3 id="stat-summarizations">-</h3>
+                <p>Summarizations</p>
+            </div>
+            <div class="icon"><i class="bi bi-stars"></i></div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box text-bg-info">
+            <div class="inner">
+                <h3 id="stat-operations">-</h3>
+                <p>Total Operations</p>
+            </div>
+            <div class="icon"><i class="bi bi-activity"></i></div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <!-- Spend Over Time -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header"><h5 class="card-title mb-0">Daily Spend</h5></div>
+            <div class="card-body">
+                <canvas id="chart-daily-spend" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    <!-- By Engine -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><h5 class="card-title mb-0">Spend by Engine</h5></div>
+            <div class="card-body">
+                <canvas id="chart-by-engine" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Per-Recording Costs Table -->
+<div class="card mb-4">
+    <div class="card-header"><h5 class="card-title mb-0">Cost per Recording</h5></div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Recording</th>
+                        <th>Folder</th>
+                        <th class="text-end">Transcription</th>
+                        <th class="text-end">Summarization</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-center">Est.</th>
+                    </tr>
+                </thead>
+                <tbody id="cost-table-body">
+                    <tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const API = "/api/stats";
+    const fmt = (v) => `$${Number(v).toFixed(4)}`;
+
+    async function loadStats() {
+        const [totals, usage, daily, byEngine, perRec] = await Promise.all([
+            fetch(`${API}/totals`).then(r => r.json()),
+            fetch(`${API}/usage`).then(r => r.json()),
+            fetch(`${API}/daily`).then(r => r.json()),
+            fetch(`${API}/by-engine`).then(r => r.json()),
+            fetch(`${API}/per-recording`).then(r => r.json()),
+        ]);
+
+        // Summary cards
+        document.getElementById("stat-total-cost").textContent = fmt(totals.total_cost);
+        document.getElementById("stat-transcriptions").textContent = usage.transcriptions || 0;
+        document.getElementById("stat-summarizations").textContent = usage.summarizations || 0;
+        document.getElementById("stat-operations").textContent = totals.total_operations || 0;
+
+        // Daily spend chart
+        if (daily.data && daily.data.length > 0) {
+            new Chart(document.getElementById("chart-daily-spend"), {
+                type: "bar",
+                data: {
+                    labels: daily.data.map(d => d.date),
+                    datasets: [{
+                        label: "Spend ($)",
+                        data: daily.data.map(d => d.total_cost),
+                        backgroundColor: "rgba(13, 110, 253, 0.7)",
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true } },
+                    plugins: { legend: { display: false } },
+                }
+            });
+        }
+
+        // By engine chart
+        if (byEngine.data && byEngine.data.length > 0) {
+            const engineMap = {};
+            byEngine.data.forEach(d => {
+                engineMap[d.engine] = (engineMap[d.engine] || 0) + d.total_cost;
+            });
+            const engines = Object.keys(engineMap);
+            const colors = ["rgba(13,110,253,0.7)", "rgba(25,135,84,0.7)", "rgba(255,193,7,0.7)", "rgba(220,53,69,0.7)"];
+            new Chart(document.getElementById("chart-by-engine"), {
+                type: "doughnut",
+                data: {
+                    labels: engines.map(e => e.charAt(0).toUpperCase() + e.slice(1)),
+                    datasets: [{
+                        data: engines.map(e => engineMap[e]),
+                        backgroundColor: colors.slice(0, engines.length),
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                }
+            });
+        }
+
+        // Per-recording table
+        const tbody = document.getElementById("cost-table-body");
+        if (perRec.data && perRec.data.length > 0) {
+            tbody.innerHTML = perRec.data.map(r => `
+                <tr>
+                    <td>${r.name}</td>
+                    <td><span class="badge bg-secondary">${r.folder}</span></td>
+                    <td class="text-end">${fmt(r.transcription_cost)}</td>
+                    <td class="text-end">${fmt(r.summarization_cost)}</td>
+                    <td class="text-end fw-bold">${fmt(r.total_cost)}</td>
+                    <td class="text-center">${r.has_estimates ? '<i class="bi bi-clock text-warning" title="Includes estimates"></i>' : ''}</td>
+                </tr>
+            `).join("");
+        } else {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No cost data yet. Transcribe or summarize a recording to start tracking.</td></tr>';
+        }
+    }
+
+    loadStats();
+})();
+</script>
+{% endblock %}

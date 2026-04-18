@@ -69,10 +69,10 @@ function actionButtons(rec) {
             btns.push(`<button class="btn btn-sm btn-outline-warning btn-summarize" data-name="${rec.name}" title="Summarize"><i class="bi bi-stars"></i></button>`);
         } else {
             btns.push(`<div class="btn-group btn-group-sm transcribe-split" style="position:relative">
-                <button class="btn btn-outline-primary btn-transcribe" data-name="${rec.name}" data-engine="gemini" title="Transcribe with Gemini"><i class="bi bi-mic"></i></button>
+                <button class="btn btn-outline-primary btn-transcribe" data-name="${rec.name}" data-engine="deepgram" title="Transcribe with Deepgram"><i class="bi bi-mic"></i></button>
                 <button type="button" class="btn btn-outline-primary btn-transcribe-toggle" data-name="${rec.name}" title="Choose engine" style="padding-left:3px;padding-right:3px;border-left:0"><i class="bi bi-caret-down-fill" style="font-size:.55em"></i></button>
                 <div class="transcribe-engine-menu d-none" style="position:absolute;top:100%;right:0;z-index:1050;min-width:160px;background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:.375rem;box-shadow:0 .5rem 1rem rgba(0,0,0,.15);margin-top:2px">
-                    <a href="#" class="btn-transcribe-engine d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-body" data-name="${rec.name}" data-engine="gemini" style="font-size:.85rem"><i class="bi bi-cloud"></i> Gemini</a>
+                    <a href="#" class="btn-transcribe-engine d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-body" data-name="${rec.name}" data-engine="deepgram" style="font-size:.85rem"><i class="bi bi-cloud"></i> Deepgram Nova</a>
                     <a href="#" class="btn-transcribe-engine d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-body" data-name="${rec.name}" data-engine="whisper" style="font-size:.85rem;border-top:1px solid var(--bs-border-color)"><i class="bi bi-pc-display"></i> Whisper (local)</a>
                 </div>
             </div>`);
@@ -115,8 +115,8 @@ function renderRow(rec) {
         ? `<span class="editable-date" role="button" data-name="${rec.name}" data-recorded-at="${rec.recorded_at || ""}" title="Click to edit date/time">${dateStr} <i class="bi bi-pencil-square small text-muted"></i></span>`
         : dateStr;
     let titleStr;
-    if (rec.db_title && rec.notion_url) {
-        titleStr = `<a href="${rec.notion_url}" target="_blank" rel="noopener" class="text-decoration-none" title="Open in Notion">${rec.db_title} <i class="bi bi-box-arrow-up-right small text-muted"></i></a>`;
+    if (rec.db_title) {
+        titleStr = rec.db_title;
     } else {
         titleStr = rec.db_title || '<span class="text-muted">-</span>';
     }
@@ -1248,7 +1248,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Start transcription helper
     async function startTranscription(name, engine, triggerBtn) {
-        const engineLabel = engine === "whisper" ? "Whisper (local)" : "Gemini AI";
+        const engineLabel = engine === "whisper" ? "Whisper (local)" : "Deepgram Nova";
 
         if (triggerBtn) {
             triggerBtn.disabled = true;
@@ -1529,9 +1529,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return summaries.map((s) => {
             const tags = (s.tags || []).join(", ");
             const created = s.created_at ? new Date(s.created_at).toLocaleString() : "";
-            const notionLink = s.notion_url
-                ? `<a href="${escapeHtml(s.notion_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success"><i class="bi bi-box-arrow-up-right me-1"></i>Open</a>`
-                : "";
+            const notionLink = "";
 
             return `<div class="card mb-3" data-summary-id="${s.id}">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -1730,7 +1728,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         closePromptPicker();
         openSummaryModal(currentSummarizeName);
-        summaryLoading.querySelector("p").textContent = "Generating summary with Gemini AI… this may take a moment.";
+        summaryLoading.querySelector("p").textContent = "Generating summary… this may take a moment.";
 
         try {
             const res = await fetch(`${SUMMARIZE_URL}/${encodeURIComponent(currentSummarizeName)}`, {
@@ -1817,7 +1815,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             hide(shareLoading);
             if (!data.ok || data.destinations.length === 0) {
-                shareError.textContent = "No publish destinations configured. Set NOTION_API_KEY and NOTION_DATABASE_ID in your .env file.";
+                shareError.textContent = "No export destinations configured. Set OBSIDIAN_VAULT_PATH in your .env file.";
                 show(shareError);
                 return;
             }
@@ -1870,7 +1868,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     hide(shareSuccessLink);
                 }
                 show(shareSuccess);
-                // Refresh dashboard so the Notion link appears on the title
+                // Refresh dashboard
                 await loadDashboard();
             } else {
                 shareError.textContent = data.error;
