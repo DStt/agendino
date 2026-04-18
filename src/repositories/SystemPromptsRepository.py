@@ -23,7 +23,7 @@ class SystemPromptsRepository:
     def _collect_prompts(lang_dir: Path, category_dir: Path) -> list[dict]:
         prompts = []
         for prompt_file in sorted(category_dir.iterdir()):
-            if prompt_file.is_file() and prompt_file.suffix == ".txt":
+            if prompt_file.is_file() and prompt_file.suffix in (".txt", ".md"):
                 prompt_id = f"{lang_dir.name}/{category_dir.name}/{prompt_file.stem}"
                 label = f"{category_dir.name} / {prompt_file.stem}"
                 prompts.append(
@@ -37,7 +37,9 @@ class SystemPromptsRepository:
         return prompts
 
     def get_prompt_content(self, prompt_id: str) -> str | None:
-        prompt_path = self._prompts_dir / f"{prompt_id}.txt"
-        if not prompt_path.exists():
-            return None
-        return prompt_path.read_text(encoding="utf-8")
+        # Try .txt first, then .md
+        for ext in (".txt", ".md"):
+            prompt_path = self._prompts_dir / f"{prompt_id}{ext}"
+            if prompt_path.exists():
+                return prompt_path.read_text(encoding="utf-8")
+        return None
