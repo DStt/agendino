@@ -6,15 +6,16 @@ from controllers.CalendarController import CalendarController
 from controllers.DashboardController import DashboardController
 from controllers.ProactorController import ProactorController
 from controllers.RAGController import RAGController
+from repositories.CostTrackingRepository import CostTrackingRepository
 from repositories.LocalRecordingsRepository import LocalRecordingsRepository
 from repositories.SqliteDBRepository import SqliteDBRepository
 from repositories.SystemPromptsRepository import SystemPromptsRepository
 from repositories.VectorStoreRepository import VectorStoreRepository
-from services.NotionService import NotionService
+from services.DeepgramTranscriptionService import DeepgramTranscriptionService
+from services.ObsidianExportService import ObsidianExportService
 from services.RAGService import RAGService
 from services.SummarizationService import SummarizationService
 from services.TaskGenerationService import TaskGenerationService
-from services.TranscriptionService import TranscriptionService
 from services.WhisperTranscriptionService import WhisperTranscriptionService
 from services.DailyRecapService import DailyRecapService
 from services.AuthService import AuthService
@@ -61,9 +62,9 @@ def get_local_recordings_repository() -> LocalRecordingsRepository:
     return LocalRecordingsRepository(local_recordings_path=os.path.join(get_root_path(), "local_recordings"))
 
 
-def get_transcription_service() -> TranscriptionService:
+def get_deepgram_transcription_service() -> DeepgramTranscriptionService:
     _config = get_config()
-    return TranscriptionService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
+    return DeepgramTranscriptionService(api_key=_config.get("DEEPGRAM_API_KEY", ""))
 
 
 def get_whisper_transcription_service() -> WhisperTranscriptionService:
@@ -89,20 +90,24 @@ def get_system_prompts_repository() -> SystemPromptsRepository:
     return SystemPromptsRepository(prompts_path=os.path.join(get_root_path(), "system_prompts"))
 
 
-def get_notion_service() -> NotionService:
+def get_obsidian_export_service() -> ObsidianExportService:
     _config = get_config()
-    return NotionService(
-        api_key=_config["NOTION_API_KEY"],
-        parent_page_id=_config["NOTION_PAGE_ID"],
-    )
+    vault_path = _config.get("OBSIDIAN_VAULT_PATH", "")
+    return ObsidianExportService(vault_path=vault_path)
+
+
+def get_cost_tracking_repository() -> CostTrackingRepository:
+    _config = get_config()
+    db_path = os.path.join(get_root_path(), "settings", _config["DATABASE_NAME"])
+    return CostTrackingRepository(db_path=db_path)
 
 
 def _build_publish_services() -> dict:
     """Build a dict of configured publish services (only includes services with valid config)."""
     services = {}
-    notion = get_notion_service()
-    if notion.is_configured:
-        services["notion"] = notion
+    obsidian = get_obsidian_export_service()
+    if obsidian.is_configured:
+        services["obsidian"] = obsidian
     return services
 
 
@@ -115,13 +120,14 @@ def get_dashboard_controller() -> DashboardController:
     return DashboardController(
         sqlite_db_repository=get_sqlite_db_repository(),
         local_recordings_repository=get_local_recordings_repository(),
-        transcription_service=get_transcription_service(),
+        deepgram_transcription_service=get_deepgram_transcription_service(),
         summarization_service=get_summarization_service(),
         task_generation_service=get_task_generation_service(),
         system_prompts_repository=get_system_prompts_repository(),
         template_path=get_template_path(),
         publish_services=_build_publish_services(),
         whisper_transcription_service=get_whisper_transcription_service(),
+        cost_tracking_repository=get_cost_tracking_repository(),
         auth_enabled=is_auth_enabled(),
     )
 

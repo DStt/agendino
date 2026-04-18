@@ -8,12 +8,14 @@ from fastapi.templating import Jinja2Templates
 
 from models.DBRecording import DBRecording
 from models.DBTask import DBTask
+from models.dto.CostMetadata import CostMetadata
+from repositories.CostTrackingRepository import CostTrackingRepository
 from repositories.LocalRecordingsRepository import LocalRecordingsRepository, ALLOWED_AUDIO_EXTENSIONS
 from repositories.SqliteDBRepository import SqliteDBRepository
 from repositories.SystemPromptsRepository import SystemPromptsRepository
+from services.DeepgramTranscriptionService import DeepgramTranscriptionService
 from services.SummarizationService import SummarizationService
 from services.TaskGenerationService import TaskGenerationService
-from services.TranscriptionService import TranscriptionService
 from services.WhisperTranscriptionService import WhisperTranscriptionService
 
 MIME_TYPES = {
@@ -34,24 +36,26 @@ class DashboardController:
         self,
         sqlite_db_repository: SqliteDBRepository,
         local_recordings_repository: LocalRecordingsRepository,
-        transcription_service: TranscriptionService,
+        deepgram_transcription_service: DeepgramTranscriptionService,
         summarization_service: SummarizationService,
         task_generation_service: TaskGenerationService,
         system_prompts_repository: SystemPromptsRepository,
         template_path: str,
         publish_services: dict[str, object] | None = None,
         whisper_transcription_service: WhisperTranscriptionService | None = None,
+        cost_tracking_repository: CostTrackingRepository | None = None,
         auth_enabled: bool = False,
     ):
         self._sqlite_db_repository = sqlite_db_repository
         self._local_recordings_repository = local_recordings_repository
-        self._transcription_service = transcription_service
+        self._deepgram_transcription_service = deepgram_transcription_service
         self._summarization_service = summarization_service
         self._task_generation_service = task_generation_service
         self._system_prompts_repository = system_prompts_repository
         self._templates = Jinja2Templates(directory=template_path)
         self._publish_services: dict[str, object] = publish_services or {}
         self._whisper_transcription_service = whisper_transcription_service
+        self._cost_tracking_repository = cost_tracking_repository
         self._auth_enabled = auth_enabled
 
     @staticmethod
@@ -319,7 +323,7 @@ class DashboardController:
                 return candidate, ext_dot.lstrip(".")
         return f"{bare_name}.hda", "hda"
 
-    def transcribe_recording(self, name: str, engine: str = "gemini") -> dict:
+    def transcribe_recording(self, name: str, engine: str = "deepgram") -> dict:
         bare_name = self._bare_name(name)
         local_filename, file_ext = self._resolve_local_filename(bare_name)
 
@@ -333,20 +337,27 @@ class DashboardController:
         audio_path = self._local_recordings_repository.get_path(local_filename)
         mime_type = MIME_TYPES.get(file_ext, "audio/mpeg")
 
-        # Select transcription engine
-        if engine == "whisper":
-            if not self._whisper_transcription_service:
-                return {"ok": False, "error": "Whisper transcription service is not available"}
-            svc = self._whisper_transcription_service
-        else:
-            svc = self._transcription_service
-
         try:
-            transcript = svc.transcribe(audio_path, mime_type=mime_type)
+            if engine == "whisper":
+                if not self._whisper_transcription_service:
+                    return {"ok": False, "error": "Whisper transcription service is not available"}
+                transcript = self._whisper_transcription_service.transcribe(audio_path, mime_type=mime_type)
+                cost = CostMetadata(
+                    operation="transcription", engine="whisper", model="local",
+                    input_units=0, output_units=0, cost_usd=0.0,
+                )
+            else:
+                transcript, cost = self._deepgram_transcription_service.transcribe(audio_path, mime_type=mime_type)
         except Exception as e:
             return {"ok": False, "error": f"Transcription failed: {str(e)}"}
 
         self._sqlite_db_repository.save_transcript(bare_name, transcript)
+
+        # Track cost
+        recording_id = db_rec.id if db_rec else None
+        if self._cost_tracking_repository and recording_id:
+            self._cost_tracking_repository.save(recording_id, cost)
+
         return {"ok": True, "transcript": transcript, "cached": False}
 
     def get_audio_file_path(self, name: str) -> tuple[str | None, str]:
@@ -503,7 +514,7 @@ class DashboardController:
         return {"ok": True, "title": title.strip(), "tags": tags_list}
 
     _DESTINATION_META: dict[str, dict] = {
-        "notion": {"label": "Notion", "icon": "bi-journal-bookmark"},
+        "obsidian": {"label": "Obsidian", "icon": "bi-journal-text"},
     }
 
     def get_publish_destinations(self) -> dict:
@@ -548,15 +559,26 @@ class DashboardController:
             date_only = recording_dt.split(" ")[0]
             publish_title = f"{date_only} {title}"
 
+        # Get recording metadata for Obsidian export
+        db_rec = self._sqlite_db_repository.get_recording_by_name(summary.recording_name)
+        folder = db_rec.folder if db_rec else "/"
+        duration = db_rec.duration if db_rec else None
+
+        # Get cost data for frontmatter
+        cost_data = None
+        if self._cost_tracking_repository and db_rec:
+            cost_data = self._cost_tracking_repository.get_by_recording(db_rec.id)
+
         try:
             result = svc.publish_summary(
                 title=publish_title,
                 summary_markdown=summary.summary,
                 tags=tags,
                 recording_name=summary.recording_name,
+                folder=folder,
+                duration_seconds=duration,
+                cost_data=cost_data,
             )
-            if result.get("ok") and result.get("url"):
-                self._sqlite_db_repository.save_notion_url(summary_id, result["url"])
             return result
         except Exception as e:
             return {"ok": False, "error": f"Publish failed: {str(e)}"}
