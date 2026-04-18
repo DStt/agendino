@@ -580,6 +580,12 @@ class DashboardController:
         if self._cost_tracking_repository and db_rec:
             cost_data = self._cost_tracking_repository.get_by_recording(db_rec.id)
 
+        # Get tasks for this summary
+        tasks_data = None
+        tasks_list = self._sqlite_db_repository.get_tasks_by_summary(summary_id)
+        if tasks_list:
+            tasks_data = [task.to_dict() for task in tasks_list]
+
         try:
             result = svc.publish_summary(
                 title=publish_title,
@@ -589,6 +595,7 @@ class DashboardController:
                 folder=folder,
                 duration_seconds=duration,
                 cost_data=cost_data,
+                tasks=tasks_data,
             )
             return result
         except Exception as e:

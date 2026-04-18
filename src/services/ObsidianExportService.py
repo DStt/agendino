@@ -22,6 +22,7 @@ class ObsidianExportService:
         folder: str = "/",
         duration_seconds: int | None = None,
         cost_data: list[dict] | None = None,
+        tasks: list[dict] | None = None,
     ) -> dict:
         if not self.is_configured:
             return {"ok": False, "error": f"Obsidian vault path does not exist: {self._vault_path}"}
@@ -48,12 +49,43 @@ class ObsidianExportService:
             cost_data=cost_data,
         )
 
-        # Write file
+        # Build content
         content = f"---\n{frontmatter}---\n\n{summary_markdown}"
+
+        # Append tasks as Obsidian checkboxes
+        if tasks:
+            content += "\n\n## Tasks\n\n"
+            content += self._format_tasks(tasks)
+
         file_path.write_text(content, encoding="utf-8")
 
         logger.info("Exported summary to Obsidian: %s", file_path)
         return {"ok": True, "url": str(file_path)}
+
+    @staticmethod
+    def _format_tasks(tasks: list[dict]) -> str:
+        """Format tasks as Obsidian checkbox list with subtask indentation."""
+        lines = []
+        # Separate parent tasks and subtasks
+        parents = [t for t in tasks if not t.get("parent_task_id")]
+        subtask_map: dict[int, list[dict]] = {}
+        for t in tasks:
+            pid = t.get("parent_task_id")
+            if pid:
+                subtask_map.setdefault(pid, []).append(t)
+
+        for t in parents:
+            checkbox = "x" if t.get("status") == "done" else " "
+            lines.append(f"- [{checkbox}] {t['title']}")
+            if t.get("description"):
+                lines.append(f"  {t['description']}")
+            for sub in subtask_map.get(t["id"], []):
+                sub_checkbox = "x" if sub.get("status") == "done" else " "
+                lines.append(f"  - [{sub_checkbox}] {sub['title']}")
+                if sub.get("description"):
+                    lines.append(f"    {sub['description']}")
+
+        return "\n".join(lines) + "\n"
 
     @staticmethod
     def _sanitize_filename(name: str) -> str:
