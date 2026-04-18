@@ -12,6 +12,7 @@ from repositories.SqliteDBRepository import SqliteDBRepository
 from repositories.SystemPromptsRepository import SystemPromptsRepository
 from repositories.VectorStoreRepository import VectorStoreRepository
 from services.DeepgramTranscriptionService import DeepgramTranscriptionService
+from services.TranscriptionService import TranscriptionService
 from services.ModelRegistry import ModelRegistry
 from services.ObsidianExportService import ObsidianExportService
 from services.RAGService import RAGService
@@ -66,6 +67,11 @@ def get_local_recordings_repository() -> LocalRecordingsRepository:
 def get_deepgram_transcription_service() -> DeepgramTranscriptionService:
     _config = get_config()
     return DeepgramTranscriptionService(api_key=_config.get("DEEPGRAM_API_KEY", ""))
+
+
+def get_transcription_service() -> TranscriptionService:
+    _config = get_config()
+    return TranscriptionService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
 
 
 def get_whisper_transcription_service() -> WhisperTranscriptionService:
@@ -137,6 +143,7 @@ def get_dashboard_controller() -> DashboardController:
         template_path=get_template_path(),
         publish_services=_build_publish_services(),
         whisper_transcription_service=get_whisper_transcription_service(),
+        gemini_transcription_service=get_transcription_service(),
         cost_tracking_repository=get_cost_tracking_repository(),
         auth_enabled=is_auth_enabled(),
     )

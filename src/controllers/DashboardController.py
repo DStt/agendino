@@ -16,6 +16,7 @@ from repositories.SystemPromptsRepository import SystemPromptsRepository
 from services.DeepgramTranscriptionService import DeepgramTranscriptionService
 from services.SummarizationService import SummarizationService
 from services.TaskGenerationService import TaskGenerationService
+from services.TranscriptionService import TranscriptionService
 from services.WhisperTranscriptionService import WhisperTranscriptionService
 
 MIME_TYPES = {
@@ -43,6 +44,7 @@ class DashboardController:
         template_path: str,
         publish_services: dict[str, object] | None = None,
         whisper_transcription_service: WhisperTranscriptionService | None = None,
+        gemini_transcription_service: TranscriptionService | None = None,
         cost_tracking_repository: CostTrackingRepository | None = None,
         auth_enabled: bool = False,
     ):
@@ -55,6 +57,7 @@ class DashboardController:
         self._templates = Jinja2Templates(directory=template_path)
         self._publish_services: dict[str, object] = publish_services or {}
         self._whisper_transcription_service = whisper_transcription_service
+        self._gemini_transcription_service = gemini_transcription_service
         self._cost_tracking_repository = cost_tracking_repository
         self._auth_enabled = auth_enabled
 
@@ -344,6 +347,14 @@ class DashboardController:
                 transcript = self._whisper_transcription_service.transcribe(audio_path, mime_type=mime_type)
                 cost = CostMetadata(
                     operation="transcription", engine="whisper", model="local",
+                    input_units=0, output_units=0, cost_usd=0.0,
+                )
+            elif engine == "gemini":
+                if not self._gemini_transcription_service:
+                    return {"ok": False, "error": "Gemini transcription service is not available"}
+                transcript = self._gemini_transcription_service.transcribe(audio_path, mime_type=mime_type)
+                cost = CostMetadata(
+                    operation="transcription", engine="gemini", model=self._gemini_transcription_service._model,
                     input_units=0, output_units=0, cost_usd=0.0,
                 )
             else:

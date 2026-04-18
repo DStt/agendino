@@ -14,7 +14,7 @@ class ModelRegistry:
         self._engines = [
             EngineInfo(id="deepgram", name="Deepgram Nova", type="transcription", available=deepgram_available),
             EngineInfo(id="whisper", name="Whisper (local)", type="transcription", available=whisper_available),
-            EngineInfo(id="gemini", name="Gemini", type="summarization", available=gemini_available),
+            EngineInfo(id="gemini", name="Gemini", type="both", available=gemini_available),
         ]
 
     def get_transcription_engines(self) -> list[EngineInfo]:

@@ -73,6 +73,7 @@ function actionButtons(rec) {
                 <button type="button" class="btn btn-outline-primary btn-transcribe-toggle" data-name="${rec.name}" title="Choose engine" style="padding-left:3px;padding-right:3px;border-left:0"><i class="bi bi-caret-down-fill" style="font-size:.55em"></i></button>
                 <div class="transcribe-engine-menu d-none" style="position:absolute;top:100%;right:0;z-index:1050;min-width:160px;background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:.375rem;box-shadow:0 .5rem 1rem rgba(0,0,0,.15);margin-top:2px">
                     <a href="#" class="btn-transcribe-engine d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-body" data-name="${rec.name}" data-engine="deepgram" style="font-size:.85rem"><i class="bi bi-cloud"></i> Deepgram Nova</a>
+                    <a href="#" class="btn-transcribe-engine d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-body" data-name="${rec.name}" data-engine="gemini" style="font-size:.85rem;border-top:1px solid var(--bs-border-color)"><i class="bi bi-cloud"></i> Gemini</a>
                     <a href="#" class="btn-transcribe-engine d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-body" data-name="${rec.name}" data-engine="whisper" style="font-size:.85rem;border-top:1px solid var(--bs-border-color)"><i class="bi bi-pc-display"></i> Whisper (local)</a>
                 </div>
             </div>`);
@@ -1248,7 +1249,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Start transcription helper
     async function startTranscription(name, engine, triggerBtn) {
-        const engineLabel = engine === "whisper" ? "Whisper (local)" : "Deepgram Nova";
+        const engineLabel = engine === "whisper" ? "Whisper (local)" : engine === "gemini" ? "Gemini" : "Deepgram Nova";
 
         if (triggerBtn) {
             triggerBtn.disabled = true;
