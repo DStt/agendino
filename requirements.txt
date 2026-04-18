@@ -9,3 +9,4 @@ icalendar
 recurring-ical-events
 mutagen
 faster-whisper
+deepgram-sdk
