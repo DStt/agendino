@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Tasks{% endblock %}
+{% block page_header %}Tasks{% endblock %}
+
+{% block content %}
+<!-- Filter Bar -->
+<div class="d-flex gap-2 mb-4">
+    <button class="btn btn-sm btn-primary task-filter active" data-filter="all">All</button>
+    <button class="btn btn-sm btn-outline-secondary task-filter" data-filter="open">Open</button>
+    <button class="btn btn-sm btn-outline-secondary task-filter" data-filter="done">Done</button>
+    <span class="ms-auto text-muted" id="task-count"></span>
+</div>
+
+<!-- Task Groups -->
+<div id="task-groups">
+    <div class="text-center text-muted py-5">
+        <div class="spinner-border spinner-border-sm me-2"></div>Loading tasks...
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const groupsDiv = document.getElementById("task-groups");
+    const countSpan = document.getElementById("task-count");
+    let allTasks = [];
+    let currentFilter = "all";
+
+    async function loadTasks() {
+        try {
+            const res = await fetch("/api/tasks/all");
+            const data = await res.json();
+            if (data.ok) {
+                allTasks = data.tasks;
+                renderTasks();
+            } else {
+                groupsDiv.innerHTML = '<div class="alert alert-danger">Failed to load tasks.</div>';
+            }
+        } catch (e) {
+            groupsDiv.innerHTML = '<div class="alert alert-danger">Failed to load tasks.</div>';
+        }
+    }
+
+    function renderTasks() {
+        let filtered = allTasks;
+        if (currentFilter !== "all") {
+            filtered = allTasks.filter(t => t.status === currentFilter);
+        }
+
+        // Group by recording
+        const groups = {};
+        filtered.forEach(t => {
+            const key = t.recording_name;
+            if (!groups[key]) {
+                groups[key] = { recording_name: key, folder: t.recording_folder, tasks: [] };
+            }
+            groups[key].tasks.push(t);
+        });
+
+        const totalOpen = allTasks.filter(t => t.status === "open" && !t.parent_task_id).length;
+        const totalDone = allTasks.filter(t => t.status === "done" && !t.parent_task_id).length;
+        countSpan.textContent = `${totalOpen} open, ${totalDone} done`;
+
+        const groupKeys = Object.keys(groups);
+        if (groupKeys.length === 0) {
+            groupsDiv.innerHTML = '<div class="text-center text-muted py-5">No tasks found.</div>';
+            return;
+        }
+
+        groupsDiv.innerHTML = groupKeys.map(key => {
+            const g = groups[key];
+            // Separate parent tasks and subtasks
+            const parents = g.tasks.filter(t => !t.parent_task_id);
+            const subtaskMap = {};
+            g.tasks.filter(t => t.parent_task_id).forEach(t => {
+                if (!subtaskMap[t.parent_task_id]) subtaskMap[t.parent_task_id] = [];
+                subtaskMap[t.parent_task_id].push(t);
+            });
+
+            const taskRows = parents.map(t => {
+                const checked = t.status === "done" ? "checked" : "";
+                const textClass = t.status === "done" ? "text-decoration-line-through text-muted" : "";
+                const subs = subtaskMap[t.id] || [];
+                const subHtml = subs.map(s => {
+                    const sChecked = s.status === "done" ? "checked" : "";
+                    const sTextClass = s.status === "done" ? "text-decoration-line-through text-muted" : "";
+                    return `<div class="d-flex align-items-start gap-2 ms-4 py-1">
+                        <input type="checkbox" class="form-check-input mt-1 task-toggle" data-task-id="${s.id}" ${sChecked}>
+                        <div class="flex-grow-1">
+                            <span class="${sTextClass}">${escapeHtml(s.title)}</span>
+                            ${s.description ? `<div class="text-muted small">${escapeHtml(s.description)}</div>` : ''}
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger task-delete" data-task-id="${s.id}" title="Delete"><i class="bi bi-trash3"></i></button>
+                    </div>`;
+                }).join("");
+
+                return `<div class="d-flex align-items-start gap-2 py-2 border-bottom">
+                    <input type="checkbox" class="form-check-input mt-1 task-toggle" data-task-id="${t.id}" ${checked}>
+                    <div class="flex-grow-1">
+                        <span class="${textClass}">${escapeHtml(t.title)}</span>
+                        ${t.description ? `<div class="text-muted small">${escapeHtml(t.description)}</div>` : ''}
+                        ${subHtml}
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger task-delete" data-task-id="${t.id}" title="Delete"><i class="bi bi-trash3"></i></button>
+                </div>`;
+            }).join("");
+
+            return `<div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-soundwave me-2"></i>${escapeHtml(g.recording_name)}</h6>
+                    <span class="badge bg-secondary">${g.folder}</span>
+                </div>
+                <div class="card-body p-0 px-3">${taskRows}</div>
+            </div>`;
+        }).join("");
+    }
+
+    function escapeHtml(s) {
+        const d = document.createElement("div");
+        d.textContent = s || "";
+        return d.innerHTML;
+    }
+
+    // Filter buttons
+    document.querySelectorAll(".task-filter").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".task-filter").forEach(b => {
+                b.classList.remove("btn-primary", "active");
+                b.classList.add("btn-outline-secondary");
+            });
+            btn.classList.remove("btn-outline-secondary");
+            btn.classList.add("btn-primary", "active");
+            currentFilter = btn.dataset.filter;
+            renderTasks();
+        });
+    });
+
+    // Toggle task status
+    document.addEventListener("change", async (e) => {
+        if (!e.target.classList.contains("task-toggle")) return;
+        const taskId = e.target.dataset.taskId;
+        const newStatus = e.target.checked ? "done" : "open";
+        try {
+            await fetch(`/api/dashboard/tasks/${taskId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: newStatus }),
+            });
+            const task = allTasks.find(t => String(t.id) === taskId);
+            if (task) task.status = newStatus;
+            renderTasks();
+        } catch (e) {
+            e.target.checked = !e.target.checked;
+        }
+    });
+
+    // Delete task
+    document.addEventListener("click", async (e) => {
+        const btn = e.target.closest(".task-delete");
+        if (!btn) return;
+        const taskId = btn.dataset.taskId;
+        try {
+            await fetch(`/api/dashboard/tasks/${taskId}`, { method: "DELETE" });
+            allTasks = allTasks.filter(t => String(t.id) !== taskId && String(t.parent_task_id) !== taskId);
+            renderTasks();
+        } catch (err) {}
+    });
+
+    loadTasks();
+})();
+</script>
+{% endblock %}

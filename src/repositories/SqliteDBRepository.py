@@ -1385,3 +1385,22 @@ class SqliteDBRepository:
             return [dict(r) for r in rows]
         finally:
             conn.close()
+
+    # ─── All Tasks ───────────────────────────────────────────────
+
+    def get_all_tasks_grouped(self) -> list[dict]:
+        """Get all tasks grouped by recording and summary."""
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                """SELECT t.id, t.summary_id, t.parent_task_id, t.title, t.description, t.status, t.created_at,
+                          s.title as summary_title, s.version as summary_version,
+                          r.name as recording_name, r.folder as recording_folder
+                   FROM task t
+                   JOIN summary s ON t.summary_id = s.id
+                   JOIN recording r ON s.recording_id = r.id
+                   ORDER BY r.name, s.version DESC, t.parent_task_id NULLS FIRST, t.id"""
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()

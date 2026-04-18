@@ -7,6 +7,7 @@ from .endpoints import dashboard
 from .endpoints import knowledge
 from .endpoints import proactor
 from .endpoints import stats
+from .endpoints import tasks
 
 router = APIRouter()
 
@@ -17,3 +18,4 @@ router.include_router(proactor.router, prefix="/proactor")
 router.include_router(knowledge.router, prefix="/knowledge")
 router.include_router(stats.router, prefix="/stats")
 router.include_router(compare.router, prefix="/compare")
+router.include_router(tasks.router, prefix="/tasks")
