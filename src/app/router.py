@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.api import router as api_router
+from app.web.compare import router as compare_router
 from app.web.dashboard import router as web_router
 from app.web.knowledge import router as knowledge_router
 from app.web.login import router as login_router
@@ -13,3 +14,4 @@ router.include_router(login_router, prefix="")
 router.include_router(web_router, prefix="")
 router.include_router(knowledge_router, prefix="")
 router.include_router(stats_router, prefix="")
+router.include_router(compare_router, prefix="")

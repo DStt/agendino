@@ -12,6 +12,7 @@ from repositories.SqliteDBRepository import SqliteDBRepository
 from repositories.SystemPromptsRepository import SystemPromptsRepository
 from repositories.VectorStoreRepository import VectorStoreRepository
 from services.DeepgramTranscriptionService import DeepgramTranscriptionService
+from services.ModelRegistry import ModelRegistry
 from services.ObsidianExportService import ObsidianExportService
 from services.RAGService import RAGService
 from services.SummarizationService import SummarizationService
@@ -100,6 +101,15 @@ def get_cost_tracking_repository() -> CostTrackingRepository:
     _config = get_config()
     db_path = os.path.join(get_root_path(), "settings", _config["DATABASE_NAME"])
     return CostTrackingRepository(db_path=db_path)
+
+
+def get_model_registry() -> ModelRegistry:
+    _config = get_config()
+    return ModelRegistry(
+        deepgram_available=bool(_config.get("DEEPGRAM_API_KEY")),
+        whisper_available=True,
+        gemini_available=bool(_config.get("GEMINI_API_KEY")),
+    )
 
 
 def _build_publish_services() -> dict:

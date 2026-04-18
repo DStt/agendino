@@ -1301,3 +1301,87 @@ class SqliteDBRepository:
             conn.commit()
         finally:
             conn.close()
+
+    # ─── Comparison ──────────────────────────────────────────────
+
+    def create_comparison_run(self, recording_id: int, run_type: str) -> int:
+        conn = self._connect()
+        try:
+            cursor = conn.execute(
+                "INSERT INTO comparison_run (recording_id, run_type) VALUES (?, ?)",
+                (recording_id, run_type),
+            )
+            conn.commit()
+            return cursor.lastrowid
+        finally:
+            conn.close()
+
+    def add_comparison_result(self, run_id: int, engine: str, model: str | None,
+                              system_prompt_id: str | None, output_text: str,
+                              cost_usd: float, processing_time_ms: int | None) -> int:
+        conn = self._connect()
+        try:
+            cursor = conn.execute(
+                """INSERT INTO comparison_result
+                   (run_id, engine, model, system_prompt_id, output_text, cost_usd, processing_time_ms)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (run_id, engine, model, system_prompt_id, output_text, cost_usd, processing_time_ms),
+            )
+            conn.commit()
+            return cursor.lastrowid
+        finally:
+            conn.close()
+
+    def add_comparison_feedback(self, run_id: int, preferred_result_id: int | None,
+                                 segment_index: int | None, notes: str | None) -> int:
+        conn = self._connect()
+        try:
+            cursor = conn.execute(
+                """INSERT INTO comparison_feedback
+                   (run_id, segment_index, preferred_result_id, notes) VALUES (?, ?, ?, ?)""",
+                (run_id, segment_index, preferred_result_id, notes),
+            )
+            conn.commit()
+            return cursor.lastrowid
+        finally:
+            conn.close()
+
+    def get_comparison_runs(self, recording_id: int | None = None) -> list[dict]:
+        conn = self._connect()
+        try:
+            if recording_id:
+                rows = conn.execute(
+                    """SELECT cr.*, r.name as recording_name
+                       FROM comparison_run cr JOIN recording r ON cr.recording_id = r.id
+                       WHERE cr.recording_id = ? ORDER BY cr.created_at DESC""",
+                    (recording_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT cr.*, r.name as recording_name
+                       FROM comparison_run cr JOIN recording r ON cr.recording_id = r.id
+                       ORDER BY cr.created_at DESC LIMIT 50"""
+                ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def get_comparison_results(self, run_id: int) -> list[dict]:
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM comparison_result WHERE run_id = ? ORDER BY id", (run_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def get_comparison_feedback(self, run_id: int) -> list[dict]:
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM comparison_feedback WHERE run_id = ? ORDER BY id", (run_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
