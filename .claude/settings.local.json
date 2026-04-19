@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs basename:*)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(awk '{print $NF}')",
+      "Bash(git checkout:*)",
+      "Bash(python:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(.venv/Scripts/pip install:*)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(git rm:*)",
+      "Bash(git log:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
