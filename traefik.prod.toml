@@ -1,0 +1,20 @@
+[entryPoints]
+[entryPoints.web]
+address = ":80"
+
+[entryPoints.websecure]
+address = ":443"
+[entryPoints.websecure.http.tls]
+
+[accessLog]
+
+[api]
+insecure = false
+dashboard = true
+basePath = "/traefik"
+
+[providers]
+[providers.docker]
+exposedByDefault = false
+[providers.file]
+directory = "/etc/traefik/dynamic"

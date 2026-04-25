@@ -1,0 +1,38 @@
+services:
+  agendino:
+    build: .
+    expose:
+      - 8000
+    volumes:
+      - "{local-dir-here}:/app/local_recordings"
+      - "{local-dir-here}:/app/settings"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fastapi.rule=Host(`{internal-ip-here}`)"
+      - "traefik.http.routers.fastapi.tls=true"
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1 # alternatively, use `count: all` for all GPUs
+    #           capabilities: [ gpu ]
+
+  traefik:
+    build:
+      context: .
+      dockerfile: Dockerfile.traefik
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "{local-dir-here}:/certs:ro"
+      - "./dynamic:/etc/traefik/dynamic:ro"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`{internal-ip-here}`) && (PathPrefix(`/traefik/api`) || PathPrefix(`/traefik/dashboard`))"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.service=api@internal"
