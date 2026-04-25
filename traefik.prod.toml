@@ -11,6 +11,7 @@ address = ":443"
 [api]
 insecure = false
 dashboard = true
+basePath = "/traefik"
 
 [providers]
 [providers.docker]
