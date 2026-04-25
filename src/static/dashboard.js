@@ -50,6 +50,14 @@ function formatSize(bytes) {
     return `${(mb / 1024).toFixed(2)} GB`;
 }
 
+function formatTime12Hour(time24fmt) {
+    if (!time24fmt) return "";
+    const [hours, minutes, seconds] = time24fmt.split(":").map(Number);
+    const meridiem = hours >= 12 ? "PM" : "AM";
+    const hour12fmt = hours % 12 || 12;
+    return `${String(hour12fmt).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")} ${meridiem}`;
+}
+
 function statusBadge(ok, yesIcon = "bi-check-circle-fill", noIcon = "bi-x-circle") {
     if (ok) {
         return `<span class="badge-status badge-yes"><i class="bi ${yesIcon}"></i></span>`;
@@ -110,7 +118,7 @@ function fileTypeBadge(ext) {
 }
 
 function renderRow(rec) {
-    const dateStr = rec.date && rec.time ? `${rec.date} ${rec.time}` : (rec.date || "-");
+    const dateStr = rec.date && rec.time ? `${rec.date} ${formatTime12Hour(rec.time)}` : (rec.date || "-");
     const dateCell = rec.in_db
         ? `<span class="editable-date" role="button" data-name="${rec.name}" data-recorded-at="${rec.recorded_at || ""}" title="Click to edit date/time">${dateStr} <i class="bi bi-pencil-square small text-muted"></i></span>`
         : dateStr;
