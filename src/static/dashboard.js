@@ -19,6 +19,8 @@ const DELETE_RECORDING_URL = "/api/dashboard/recording";
 const TASKS_GENERATE_URL = "/api/dashboard/tasks/generate";
 const TASKS_URL = "/api/dashboard/tasks";
 const UPLOAD_URL = "/api/dashboard/upload";
+const BULK_IMPORT_PREVIEW_URL = "/api/dashboard/import/preview";
+const BULK_IMPORT_CONFIRM_URL = "/api/dashboard/import/confirm";
 const RECORDING_UPDATE_URL = "/api/dashboard/recording";
 const FOLDERS_URL = "/api/dashboard/folders";
 const MOVE_RECORDING_URL = "/api/dashboard/recording";
@@ -61,13 +63,7 @@ function actionButtons(rec) {
     const btns = [];
     if (rec.on_local) {
         btns.push(`<button class="btn btn-sm btn-outline-secondary btn-play-audio" data-name="${rec.name}" title="Play audio"><i class="bi bi-play-circle"></i></button>`);
-        if (rec.has_transcript) {
-            btns.push(`<button class="btn btn-sm btn-outline-success btn-view-transcript" data-name="${rec.name}" title="View transcript"><i class="bi bi-file-text"></i></button>`);
-            if (rec.has_summary) {
-                    btns.push(`<button class="btn btn-sm btn-outline-info btn-view-summary" data-name="${rec.name}" title="View summaries"><i class="bi bi-journal-text"></i></button>`);
-            }
-            btns.push(`<button class="btn btn-sm btn-outline-warning btn-summarize" data-name="${rec.name}" title="Summarize"><i class="bi bi-stars"></i></button>`);
-        } else {
+        if (!rec.has_transcript) {
             btns.push(`<div class="btn-group btn-group-sm transcribe-split" style="position:relative">
                 <button class="btn btn-outline-primary btn-transcribe" data-name="${rec.name}" data-engine="gemini" title="Transcribe with Gemini"><i class="bi bi-mic"></i></button>
                 <button type="button" class="btn btn-outline-primary btn-transcribe-toggle" data-name="${rec.name}" title="Choose engine" style="padding-left:3px;padding-right:3px;border-left:0"><i class="bi bi-caret-down-fill" style="font-size:.55em"></i></button>
@@ -77,6 +73,13 @@ function actionButtons(rec) {
                 </div>
             </div>`);
         }
+    }
+    if (rec.has_transcript) {
+        btns.push(`<button class="btn btn-sm btn-outline-success btn-view-transcript" data-name="${rec.name}" title="View transcript"><i class="bi bi-file-text"></i></button>`);
+        btns.push(`<button class="btn btn-sm btn-outline-warning btn-summarize" data-name="${rec.name}" title="Summarize"><i class="bi bi-stars"></i></button>`);
+    }
+    if (rec.has_summary) {
+        btns.push(`<button class="btn btn-sm btn-outline-info btn-view-summary" data-name="${rec.name}" title="View summaries"><i class="bi bi-journal-text"></i></button>`);
     }
     if (rec.in_db) {
         btns.push(`<button class="btn btn-sm btn-outline-primary btn-move-recording" data-name="${rec.name}" title="Move to folder"><i class="bi bi-folder-symlink"></i></button>`);
@@ -1047,6 +1050,216 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
+
+    // --- Bulk import modal ---
+    const bulkImportBtn = $("#btn-bulk-import");
+    const bulkImportBackdrop = $("#bulk-import-modal-backdrop");
+    const bulkImportClose = $("#bulk-import-modal-close");
+    const bulkImportCancel = $("#bulk-import-cancel-btn");
+    const bulkImportFolderInput = $("#bulk-import-folder-input");
+    const bulkImportRecursive = $("#bulk-import-recursive");
+    const bulkImportTranscribe = $("#bulk-import-transcribe");
+    const bulkImportPreviewBtn = $("#bulk-import-preview-btn");
+    const bulkImportFormSection = $("#bulk-import-form-section");
+    const bulkImportLoading = $("#bulk-import-loading");
+    const bulkImportResult = $("#bulk-import-result");
+    let _bulkImportPreview = null;
+
+    function openBulkImportModal() {
+        if (bulkImportFolderInput) bulkImportFolderInput.value = "";
+        if (bulkImportRecursive) bulkImportRecursive.checked = false;
+        if (bulkImportTranscribe) bulkImportTranscribe.checked = false;
+        _bulkImportPreview = null;
+        show(bulkImportFormSection);
+        hide(bulkImportLoading);
+        hide(bulkImportResult);
+        show(bulkImportBackdrop);
+        bulkImportFolderInput?.focus();
+    }
+
+    function closeBulkImportModal() {
+        hide(bulkImportBackdrop);
+    }
+
+    function bulkImportPayload() {
+        return {
+            folder_path: (bulkImportFolderInput?.value || "").trim(),
+            recursive: !!bulkImportRecursive?.checked,
+            transcribe_audio: !!bulkImportTranscribe?.checked,
+        };
+    }
+
+    function renderBulkImportPreview(data) {
+        const counts = data.counts || {};
+        const importable = data.importable || [];
+        const duplicates = data.duplicates || [];
+        const unsupported = data.unsupported || [];
+        const errors = data.errors || [];
+
+        let html = `
+            <div class="alert alert-info py-2">
+                Importable: <strong>${counts.importable || 0}</strong> ·
+                Duplicates: <strong>${counts.duplicates || 0}</strong> ·
+                Unsupported: <strong>${counts.unsupported || 0}</strong> ·
+                Errors: <strong>${counts.errors || 0}</strong>
+            </div>`;
+
+        if (importable.length > 0) {
+            html += `<div class="table-responsive" style="max-height: 320px; overflow:auto;">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="bulk-import-select-all" checked></th>
+                            <th>File</th>
+                            <th>Type</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            for (const item of importable) {
+                html += `<tr>
+                    <td><input type="checkbox" class="bulk-import-item" data-path="${item.path}" checked></td>
+                    <td><span class="fw-semibold">${item.filename}</span><br><small class="text-muted">${item.recording_name || ""}</small></td>
+                    <td><span class="badge bg-secondary">${item.kind}${item.content_kind ? ` / ${item.content_kind}` : ""}</span></td>
+                    <td>${item.action || ""}</td>
+                </tr>`;
+            }
+            html += `</tbody></table></div>
+                <div class="text-end mt-3">
+                    <button class="btn btn-outline-secondary me-2" id="bulk-import-back-btn">Back</button>
+                    <button class="btn btn-success" id="bulk-import-confirm-btn">
+                        <i class="bi bi-folder-check me-1"></i>Confirm Import
+                    </button>
+                </div>`;
+        } else {
+            html += `<div class="alert alert-warning">No new supported files are ready to import.</div>
+                <div class="text-end">
+                    <button class="btn btn-outline-secondary" id="bulk-import-back-btn">Back</button>
+                </div>`;
+        }
+
+        const skipped = [...duplicates, ...unsupported, ...errors];
+        if (skipped.length > 0) {
+            html += `<details class="mt-3"><summary class="small text-muted">Skipped and duplicate files</summary>
+                <ul class="small mt-2">`;
+            for (const item of skipped.slice(0, 50)) {
+                html += `<li><strong>${item.filename}</strong>: ${item.reason || item.error || "Skipped"}</li>`;
+            }
+            if (skipped.length > 50) html += `<li>…and ${skipped.length - 50} more</li>`;
+            html += `</ul></details>`;
+        }
+
+        bulkImportResult.innerHTML = html;
+        show(bulkImportResult);
+    }
+
+    if (bulkImportBtn) {
+        bulkImportBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            openBulkImportModal();
+        });
+    }
+    if (bulkImportClose) bulkImportClose.addEventListener("click", closeBulkImportModal);
+    if (bulkImportCancel) bulkImportCancel.addEventListener("click", closeBulkImportModal);
+    if (bulkImportBackdrop) {
+        bulkImportBackdrop.addEventListener("click", (e) => {
+            if (e.target === bulkImportBackdrop) closeBulkImportModal();
+        });
+    }
+
+    if (bulkImportPreviewBtn) {
+        bulkImportPreviewBtn.addEventListener("click", async () => {
+            const payload = bulkImportPayload();
+            if (!payload.folder_path) {
+                bulkImportResult.className = "alert alert-danger mt-3";
+                bulkImportResult.textContent = "Enter a folder path first.";
+                show(bulkImportResult);
+                return;
+            }
+
+            hide(bulkImportFormSection);
+            hide(bulkImportResult);
+            show(bulkImportLoading);
+
+            try {
+                const res = await fetch(BULK_IMPORT_PREVIEW_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                hide(bulkImportLoading);
+                if (!data.ok) {
+                    bulkImportResult.className = "alert alert-danger mt-3";
+                    bulkImportResult.textContent = data.error || "Preview failed";
+                    show(bulkImportResult);
+                    show(bulkImportFormSection);
+                    return;
+                }
+                _bulkImportPreview = data;
+                bulkImportResult.className = "mt-3";
+                renderBulkImportPreview(data);
+            } catch (err) {
+                hide(bulkImportLoading);
+                bulkImportResult.className = "alert alert-danger mt-3";
+                bulkImportResult.textContent = `Preview failed: ${err.message}`;
+                show(bulkImportResult);
+                show(bulkImportFormSection);
+            }
+        });
+    }
+
+    document.addEventListener("change", (e) => {
+        if (e.target.id === "bulk-import-select-all") {
+            document.querySelectorAll(".bulk-import-item").forEach(cb => cb.checked = e.target.checked);
+        }
+    });
+
+    document.addEventListener("click", async (e) => {
+        const backBtn = e.target.closest("#bulk-import-back-btn");
+        if (backBtn) {
+            e.preventDefault();
+            hide(bulkImportResult);
+            show(bulkImportFormSection);
+            return;
+        }
+
+        const confirmBtn = e.target.closest("#bulk-import-confirm-btn");
+        if (!confirmBtn || !_bulkImportPreview) return;
+        e.preventDefault();
+
+        const selectedPaths = Array.from(document.querySelectorAll(".bulk-import-item:checked"))
+            .map(cb => cb.dataset.path);
+        const payload = {
+            ...bulkImportPayload(),
+            selected_paths: selectedPaths,
+        };
+
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importing…';
+
+        try {
+            const res = await fetch(BULK_IMPORT_CONFIRM_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || "Import failed");
+            const counts = data.counts || {};
+            bulkImportResult.className = "alert alert-success mt-3";
+            bulkImportResult.innerHTML = `<i class="bi bi-check-circle me-1"></i>
+                Imported ${counts.imported || 0}; skipped ${counts.skipped || 0}; errors ${counts.errors || 0}.`;
+            await loadDashboard();
+            setTimeout(closeBulkImportModal, 1400);
+        } catch (err) {
+            bulkImportResult.className = "alert alert-danger mt-3";
+            bulkImportResult.textContent = `Import failed: ${err.message}`;
+            show(bulkImportResult);
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="bi bi-folder-check me-1"></i>Confirm Import';
+        }
+    });
 
     // --- Audio player modal ---
     const audioBackdrop = $("#audio-modal-backdrop");

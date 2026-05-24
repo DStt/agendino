@@ -1,5 +1,8 @@
 import os
+import re
+from pathlib import Path
 
+from fastapi import HTTPException
 from dotenv import load_dotenv
 
 from controllers.CalendarController import CalendarController
@@ -18,30 +21,80 @@ from services.TranscriptionService import TranscriptionService
 from services.WhisperTranscriptionService import WhisperTranscriptionService
 from services.DailyRecapService import DailyRecapService
 from services.AuthService import AuthService
+from services.BulkImportService import BulkImportService
 from services.ICalSyncService import ICalSyncService
 from services.ProactorService import ProactorService
 
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DOTENV_PATH = PROJECT_ROOT / ".env"
+
+load_dotenv(dotenv_path=DOTENV_PATH, override=True)
 
 config = {}
 
+DEFAULT_CONFIG = {
+    "DATABASE_NAME": "agendino.db",
+    "GEMINI_MODEL": "gemini-2.5-flash",
+    "GEMINI_EMBEDDING_MODEL": "gemini-embedding-001",
+    "NOTION_API_KEY": "",
+    "NOTION_PAGE_ID": "",
+    "WHISPER_MODEL_SIZE": "small",
+    "WHISPER_DEVICE": "cpu",
+    "WHISPER_COMPUTE_TYPE": "auto",
+    "AUTH_ENABLED": "false",
+    "AUTH_SECRET_KEY": "your-secret-key-here",
+}
+
+GEMINI_API_KEY_RE = re.compile(r"^AIza[0-9A-Za-z_-]{35}$")
+GEMINI_API_KEY_PLACEHOLDERS = {
+    "AIzaS",
+    "your-gemini-api-key",
+    "your-real-gemini-api-key",
+    "replace-me",
+    "changeme",
+}
+
+GEMINI_CONFIG_ERROR = (
+    f"GEMINI_API_KEY is missing or invalid. Set a real Gemini API key in {DOTENV_PATH}. "
+    "It must not be blank, a placeholder, or a truncated value. The key value was not logged."
+)
+
 
 def is_auth_enabled() -> bool:
-    return os.getenv("AUTH_ENABLED", "false").lower() in ("true", "1", "yes")
+    return get_config()["AUTH_ENABLED"].lower() in ("true", "1", "yes")
 
 
 def get_config():
     if config.get("init", False):
         return config
-    items = os.environ.items()
-    for item in items:
-        config[item[0]] = item[1]
+    config.update(DEFAULT_CONFIG)
+    config.update(os.environ)
     config["init"] = True
     return config
 
 
 def get_root_path() -> str:
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../")
+    return str(PROJECT_ROOT)
+
+
+def _is_valid_gemini_api_key(api_key: str | None) -> bool:
+    if api_key is None:
+        return False
+    stripped = api_key.strip()
+    if not stripped:
+        return False
+    if stripped in GEMINI_API_KEY_PLACEHOLDERS:
+        return False
+    if "your-" in stripped.lower() or "placeholder" in stripped.lower() or "..." in stripped:
+        return False
+    return GEMINI_API_KEY_RE.fullmatch(stripped) is not None
+
+
+def get_gemini_api_key() -> str:
+    api_key = get_config().get("GEMINI_API_KEY")
+    if not _is_valid_gemini_api_key(api_key):
+        raise HTTPException(status_code=503, detail=GEMINI_CONFIG_ERROR)
+    return api_key.strip()
 
 
 def get_template_path() -> str:
@@ -61,9 +114,16 @@ def get_local_recordings_repository() -> LocalRecordingsRepository:
     return LocalRecordingsRepository(local_recordings_path=os.path.join(get_root_path(), "local_recordings"))
 
 
+def get_bulk_import_service() -> BulkImportService:
+    return BulkImportService(
+        sqlite_db_repository=get_sqlite_db_repository(),
+        local_recordings_repository=get_local_recordings_repository(),
+    )
+
+
 def get_transcription_service() -> TranscriptionService:
     _config = get_config()
-    return TranscriptionService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
+    return TranscriptionService(api_key=get_gemini_api_key(), model=_config["GEMINI_MODEL"])
 
 
 def get_whisper_transcription_service() -> WhisperTranscriptionService:
@@ -77,12 +137,12 @@ def get_whisper_transcription_service() -> WhisperTranscriptionService:
 
 def get_summarization_service() -> SummarizationService:
     _config = get_config()
-    return SummarizationService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
+    return SummarizationService(api_key=get_gemini_api_key(), model=_config["GEMINI_MODEL"])
 
 
 def get_task_generation_service() -> TaskGenerationService:
     _config = get_config()
-    return TaskGenerationService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
+    return TaskGenerationService(api_key=get_gemini_api_key(), model=_config["GEMINI_MODEL"])
 
 
 def get_system_prompts_repository() -> SystemPromptsRepository:
@@ -108,7 +168,7 @@ def _build_publish_services() -> dict:
 
 def get_daily_recap_service() -> DailyRecapService:
     _config = get_config()
-    return DailyRecapService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
+    return DailyRecapService(api_key=get_gemini_api_key(), model=_config["GEMINI_MODEL"])
 
 
 def get_dashboard_controller() -> DashboardController:
@@ -149,14 +209,14 @@ def get_vector_store_repository() -> VectorStoreRepository:
     _config = get_config()
     return VectorStoreRepository(
         persist_path=os.path.join(get_root_path(), "settings/vector_store"),
-        api_key=_config["GEMINI_API_KEY"],
+        api_key=get_gemini_api_key(),
         model=_config["GEMINI_EMBEDDING_MODEL"],
     )
 
 
 def get_rag_service() -> RAGService:
     _config = get_config()
-    return RAGService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
+    return RAGService(api_key=get_gemini_api_key(), model=_config["GEMINI_MODEL"])
 
 
 def get_rag_controller() -> RAGController:

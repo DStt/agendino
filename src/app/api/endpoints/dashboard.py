@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 from app import depends
 from controllers.DashboardController import DashboardController, MIME_TYPES
 from models.dto.DeleteRecordingRequestDTO import DeleteRecordingRequestDTO
+from models.dto.BulkImportRequestDTO import BulkImportConfirmRequestDTO, BulkImportPreviewRequestDTO
 from models.dto.FolderRequestDTO import CreateFolderRequestDTO, RenameFolderRequestDTO, DeleteFolderRequestDTO
 from models.dto.GenerateTasksRequestDTO import GenerateTasksRequestDTO
 from models.dto.MoveRecordingRequestDTO import MoveRecordingRequestDTO, BulkMoveRecordingsRequestDTO
@@ -14,6 +15,7 @@ from models.dto.UpdateRecordingRequestDTO import UpdateRecordingRequestDTO
 from models.dto.UpdateSummaryRequestDTO import UpdateSummaryRequestDTO
 from models.dto.UpdateTaskRequestDTO import UpdateTaskRequestDTO
 from models.dto.UpdateTranscriptRequestDTO import UpdateTranscriptRequestDTO
+from services.BulkImportService import BulkImportService
 
 router = APIRouter()
 
@@ -35,6 +37,33 @@ async def upload_recording(
         raise HTTPException(status_code=400, detail="No file provided")
     file_data = await file.read()
     return dashboard_controller.upload_recording(file.filename, file_data, label)
+
+
+@router.post("/import/preview")
+async def preview_bulk_import(
+    body: BulkImportPreviewRequestDTO,
+    bulk_import_service: BulkImportService = Depends(depends.get_bulk_import_service),
+):
+    return bulk_import_service.preview(
+        folder_path=body.folder_path,
+        recursive=body.recursive,
+        transcribe_audio=body.transcribe_audio,
+    )
+
+
+@router.post("/import/confirm")
+async def confirm_bulk_import(
+    body: BulkImportConfirmRequestDTO,
+    bulk_import_service: BulkImportService = Depends(depends.get_bulk_import_service),
+):
+    transcription_service = depends.get_transcription_service() if body.transcribe_audio else None
+    return bulk_import_service.confirm(
+        folder_path=body.folder_path,
+        recursive=body.recursive,
+        transcribe_audio=body.transcribe_audio,
+        selected_paths=body.selected_paths,
+        transcription_service=transcription_service,
+    )
 
 
 @router.get("/audio/{name}")
