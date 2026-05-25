@@ -16,6 +16,7 @@ class SqliteDBRepository:
         if not os.path.exists(self._db_path):
             self._initialize_db(init_sql_script)
         self._ensure_recording_columns()
+        self._ensure_collection_tables()
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path)
@@ -50,6 +51,38 @@ class SqliteDBRepository:
             except Exception:
                 conn.execute("ALTER TABLE recording ADD COLUMN folder TEXT NOT NULL DEFAULT '/'")
                 conn.commit()
+        finally:
+            conn.close()
+
+    def _ensure_collection_tables(self) -> None:
+        """Migration: add collection tables for existing local databases."""
+        conn = self._connect()
+        try:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS collection
+                (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name        TEXT    NOT NULL UNIQUE,
+                    description TEXT    DEFAULT NULL,
+                    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS recording_collection
+                (
+                    recording_id  INTEGER NOT NULL,
+                    collection_id INTEGER NOT NULL,
+                    created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+                    PRIMARY KEY (recording_id, collection_id),
+                    FOREIGN KEY (recording_id) REFERENCES recording (id) ON DELETE CASCADE,
+                    FOREIGN KEY (collection_id) REFERENCES collection (id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_recording_collection_recording
+                    ON recording_collection (recording_id);
+                CREATE INDEX IF NOT EXISTS idx_recording_collection_collection
+                    ON recording_collection (collection_id);
+            """)
+            conn.commit()
         finally:
             conn.close()
 
@@ -354,6 +387,195 @@ class SqliteDBRepository:
         conn = self._connect()
         try:
             result = conn.execute("DELETE FROM recording WHERE name = ?", (name,))
+            conn.commit()
+            return result.rowcount > 0
+        finally:
+            conn.close()
+
+    # ─── Collection operations ───────────────────────────────────
+
+    def create_collection(self, name: str, description: str | None = None) -> dict:
+        conn = self._connect()
+        try:
+            clean_name = name.strip()
+            clean_description = description.strip() if description and description.strip() else None
+            existing = conn.execute(
+                "SELECT id, name, description, created_at FROM collection WHERE lower(name) = lower(?)",
+                (clean_name,),
+            ).fetchone()
+            if existing:
+                return {
+                    "id": existing["id"],
+                    "name": existing["name"],
+                    "description": existing["description"],
+                    "created_at": existing["created_at"],
+                    "count": self._collection_count(conn, int(existing["id"])),
+                    "created": False,
+                }
+
+            result = conn.execute(
+                "INSERT INTO collection (name, description) VALUES (?, ?)",
+                (clean_name, clean_description),
+            )
+            conn.commit()
+            collection_id = int(result.lastrowid)
+            return {
+                "id": collection_id,
+                "name": clean_name,
+                "description": clean_description,
+                "created_at": conn.execute(
+                    "SELECT created_at FROM collection WHERE id = ?",
+                    (collection_id,),
+                ).fetchone()["created_at"],
+                "count": 0,
+                "created": True,
+            }
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _collection_count(conn: sqlite3.Connection, collection_id: int) -> int:
+        row = conn.execute(
+            "SELECT COUNT(*) AS count FROM recording_collection WHERE collection_id = ?",
+            (collection_id,),
+        ).fetchone()
+        return int(row["count"]) if row else 0
+
+    def get_collections_with_counts(self) -> list[dict]:
+        conn = self._connect()
+        try:
+            rows = conn.execute("""
+                SELECT
+                    c.id,
+                    c.name,
+                    c.description,
+                    c.created_at,
+                    COUNT(rc.recording_id) AS count
+                FROM collection c
+                LEFT JOIN recording_collection rc ON rc.collection_id = c.id
+                GROUP BY c.id, c.name, c.description, c.created_at
+                ORDER BY lower(c.name)
+            """).fetchall()
+            return [
+                {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "description": row["description"],
+                    "created_at": row["created_at"],
+                    "count": row["count"],
+                }
+                for row in rows
+            ]
+        finally:
+            conn.close()
+
+    def get_recording_collections_map(self) -> dict[str, list[dict]]:
+        conn = self._connect()
+        try:
+            rows = conn.execute("""
+                SELECT r.name AS recording_name, c.id, c.name, c.description
+                FROM recording_collection rc
+                JOIN recording r ON r.id = rc.recording_id
+                JOIN collection c ON c.id = rc.collection_id
+                ORDER BY lower(c.name)
+            """).fetchall()
+            mapping: dict[str, list[dict]] = {}
+            for row in rows:
+                mapping.setdefault(row["recording_name"], []).append(
+                    {
+                        "id": row["id"],
+                        "name": row["name"],
+                        "description": row["description"],
+                    }
+                )
+            return mapping
+        finally:
+            conn.close()
+
+    def get_recording_collections(self, name: str) -> list[dict]:
+        conn = self._connect()
+        try:
+            rows = conn.execute("""
+                SELECT c.id, c.name, c.description, c.created_at
+                FROM recording_collection rc
+                JOIN recording r ON r.id = rc.recording_id
+                JOIN collection c ON c.id = rc.collection_id
+                WHERE r.name = ?
+                ORDER BY lower(c.name)
+            """, (name,)).fetchall()
+            return [
+                {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "description": row["description"],
+                    "created_at": row["created_at"],
+                }
+                for row in rows
+            ]
+        finally:
+            conn.close()
+
+    def set_recording_collections(self, name: str, collection_ids: list[int]) -> bool:
+        conn = self._connect()
+        try:
+            recording = conn.execute("SELECT id FROM recording WHERE name = ?", (name,)).fetchone()
+            if not recording:
+                return False
+            recording_id = int(recording["id"])
+            clean_ids = sorted({int(collection_id) for collection_id in collection_ids})
+            if clean_ids:
+                placeholders = ",".join(["?"] * len(clean_ids))
+                valid_rows = conn.execute(
+                    f"SELECT id FROM collection WHERE id IN ({placeholders})",
+                    clean_ids,
+                ).fetchall()
+                valid_ids = {int(row["id"]) for row in valid_rows}
+            else:
+                valid_ids = set()
+
+            conn.execute("DELETE FROM recording_collection WHERE recording_id = ?", (recording_id,))
+            for collection_id in sorted(valid_ids):
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO recording_collection (recording_id, collection_id)
+                    VALUES (?, ?)
+                    """,
+                    (recording_id, collection_id),
+                )
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+
+    def add_recording_to_collection(self, name: str, collection_id: int) -> bool:
+        conn = self._connect()
+        try:
+            recording = conn.execute("SELECT id FROM recording WHERE name = ?", (name,)).fetchone()
+            collection = conn.execute("SELECT id FROM collection WHERE id = ?", (collection_id,)).fetchone()
+            if not recording or not collection:
+                return False
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO recording_collection (recording_id, collection_id)
+                VALUES (?, ?)
+                """,
+                (recording["id"], collection["id"]),
+            )
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+
+    def remove_recording_from_collection(self, name: str, collection_id: int) -> bool:
+        conn = self._connect()
+        try:
+            recording = conn.execute("SELECT id FROM recording WHERE name = ?", (name,)).fetchone()
+            if not recording:
+                return False
+            result = conn.execute(
+                "DELETE FROM recording_collection WHERE recording_id = ? AND collection_id = ?",
+                (recording["id"], collection_id),
+            )
             conn.commit()
             return result.rowcount > 0
         finally:

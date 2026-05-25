@@ -117,6 +117,13 @@
                                                 </button>
                                             </div>
                                             <div id="folder-tree" class="folder-tree"></div>
+                                            <div class="folder-sidebar-header d-flex justify-content-between align-items-center border-top">
+                                                <span class="fw-semibold small"><i class="bi bi-collection me-1"></i>Collections</span>
+                                                <button class="btn btn-sm btn-outline-primary" id="btn-create-collection" title="New collection">
+                                                    <i class="bi bi-plus-lg"></i>
+                                                </button>
+                                            </div>
+                                            <div id="collection-tree" class="folder-tree"></div>
                                         </div>
                                         <!-- Recordings table -->
                                         <div class="col table-responsive">
@@ -474,6 +481,56 @@
                     <p class="mt-2 text-muted">Scanning library…</p>
                 </div>
                 <div id="bulk-import-result" class="mt-3 d-none"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Recording Collections Modal -->
+    <div id="recording-collections-modal-backdrop" class="transcript-modal-backdrop d-none">
+        <div class="transcript-modal" style="max-width: 480px;">
+            <div class="transcript-modal-header" style="background: var(--bs-primary);">
+                <h5 class="mb-0"><i class="bi bi-collection me-2"></i>Collections - <span id="recording-collections-name"></span></h5>
+                <button type="button" class="btn-close btn-close-white" id="recording-collections-modal-close"></button>
+            </div>
+            <div class="transcript-modal-body">
+                <div id="recording-collections-list" class="collection-checkbox-list"></div>
+                <div id="recording-collections-empty" class="text-muted small d-none">
+                    Create a collection first, then add this recording.
+                </div>
+                <div class="text-end mt-3">
+                    <button class="btn btn-outline-secondary btn-sm me-2" id="recording-collections-cancel">Cancel</button>
+                    <button class="btn btn-primary btn-sm" id="recording-collections-save">
+                        <i class="bi bi-check-lg me-1"></i>Save
+                    </button>
+                </div>
+                <div id="recording-collections-feedback" class="small mt-2 d-none"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Collection Modal -->
+    <div id="collection-modal-backdrop" class="transcript-modal-backdrop d-none">
+        <div class="transcript-modal" style="max-width: 430px;">
+            <div class="transcript-modal-header" style="background: var(--bs-success);">
+                <h5 class="mb-0"><i class="bi bi-collection me-2"></i>New Collection</h5>
+                <button type="button" class="btn-close btn-close-white" id="collection-modal-close"></button>
+            </div>
+            <div class="transcript-modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold" for="collection-name-input">Name</label>
+                    <input type="text" class="form-control" id="collection-name-input" placeholder="AI Strategy">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold" for="collection-description-input">Description <span class="text-muted">(optional)</span></label>
+                    <textarea class="form-control" id="collection-description-input" rows="3"></textarea>
+                </div>
+                <div class="text-end">
+                    <button class="btn btn-outline-secondary me-2" id="collection-modal-cancel">Cancel</button>
+                    <button class="btn btn-success" id="collection-modal-confirm">
+                        <i class="bi bi-check-lg me-1"></i>Create
+                    </button>
+                </div>
+                <div id="collection-modal-feedback" class="small mt-2 d-none"></div>
             </div>
         </div>
     </div>

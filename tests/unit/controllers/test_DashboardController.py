@@ -340,6 +340,73 @@ class TestDashboardControllerMetadata:
         assert "not found" in result["error"].lower()
 
 
+class TestDashboardControllerCollections:
+    def test_create_collection_success(self, mock_services):
+        ctrl = mock_services["controller"]
+        mock_services["sqlite_db"].create_collection.return_value = {
+            "id": 1,
+            "name": "AI Strategy",
+            "description": "",
+            "count": 0,
+        }
+
+        result = ctrl.create_collection(" AI Strategy ", "")
+
+        assert result["ok"] is True
+        assert result["collection"]["name"] == "AI Strategy"
+        mock_services["sqlite_db"].create_collection.assert_called_once_with("AI Strategy", "")
+
+    def test_create_collection_requires_name(self, mock_services):
+        ctrl = mock_services["controller"]
+
+        result = ctrl.create_collection("  ")
+
+        assert result["ok"] is False
+        assert "required" in result["error"].lower()
+
+    def test_set_recording_collections_success(self, mock_services):
+        ctrl = mock_services["controller"]
+        mock_services["sqlite_db"].set_recording_collections.return_value = True
+        mock_services["sqlite_db"].get_recording_collections.return_value = [
+            {"id": 2, "name": "Features", "description": None}
+        ]
+
+        result = ctrl.set_recording_collections("meeting.mp3", [2, 2, 1])
+
+        assert result["ok"] is True
+        mock_services["sqlite_db"].set_recording_collections.assert_called_once_with("meeting", [1, 2])
+        assert result["collections"][0]["name"] == "Features"
+
+    def test_set_recording_collections_not_found(self, mock_services):
+        ctrl = mock_services["controller"]
+        mock_services["sqlite_db"].set_recording_collections.return_value = False
+
+        result = ctrl.set_recording_collections("ghost", [1])
+
+        assert result["ok"] is False
+        assert "not found" in result["error"].lower()
+
+    def test_get_recordings_status_includes_collections(self, mock_services):
+        ctrl = mock_services["controller"]
+        rec = DBRecording(id=1, name="meeting", label="Meeting", duration=10, created_at=datetime.now())
+        mock_services["local_repo"].get_all.return_value = []
+        mock_services["sqlite_db"].get_recordings.return_value = [rec]
+        mock_services["sqlite_db"].get_latest_summaries_map.return_value = {}
+        mock_services["sqlite_db"].get_collections_with_counts.return_value = [
+            {"id": 7, "name": "Leadership", "description": None, "count": 1}
+        ]
+        mock_services["sqlite_db"].get_recording_collections_map.return_value = {
+            "meeting": [{"id": 7, "name": "Leadership", "description": None}]
+        }
+        mock_services["sqlite_db"].get_summaries.return_value = []
+        mock_services["sqlite_db"].get_recording_folders.return_value = ["/"]
+
+        result = ctrl.get_recordings_status()
+
+        assert result["collections"][0]["name"] == "Leadership"
+        assert result["recordings"][0]["collection_ids"] == [7]
+
+
 class TestDashboardControllerAudioPath:
     def test_audio_path_found(self, mock_services):
         ctrl = mock_services["controller"]

@@ -88,6 +88,8 @@ class DashboardController:
         local_files = self._local_recordings_repository.get_all()
         db_recordings = self._sqlite_db_repository.get_recordings()
         latest_summaries = self._sqlite_db_repository.get_latest_summaries_map()
+        collections = self._sqlite_db_repository.get_collections_with_counts()
+        recording_collections = self._sqlite_db_repository.get_recording_collections_map()
 
         # Map bare name → local filename (preserving actual extension)
         local_map: dict[str, str] = {}
@@ -170,6 +172,8 @@ class DashboardController:
                     "summary_count": len(self._sqlite_db_repository.get_summaries(bare_name)) if db_rec else 0,
                     "notion_url": latest_summary.notion_url if latest_summary else None,
                     "folder": db_rec.folder if db_rec else "/",
+                    "collections": recording_collections.get(bare_name, []),
+                    "collection_ids": [c["id"] for c in recording_collections.get(bare_name, [])],
                 }
             )
 
@@ -189,6 +193,7 @@ class DashboardController:
             },
             "recordings": recordings,
             "folders": folders,
+            "collections": collections,
         }
 
     def upload_recording(self, filename: str, file_data: bytes, label: str = "") -> dict:
@@ -501,6 +506,54 @@ class DashboardController:
         tags_list = [t.strip() for t in tags if t.strip()]
         self._sqlite_db_repository.update_title_and_tags(bare_name, title.strip(), ",".join(tags_list))
         return {"ok": True, "title": title.strip(), "tags": tags_list}
+
+    # ─── Collections ─────────────────────────────────────────────
+
+    def get_collections(self) -> dict:
+        return {"ok": True, "collections": self._sqlite_db_repository.get_collections_with_counts()}
+
+    def create_collection(self, name: str, description: str | None = None) -> dict:
+        clean_name = name.strip()
+        if not clean_name:
+            return {"ok": False, "error": "Collection name is required"}
+        collection = self._sqlite_db_repository.create_collection(clean_name, description)
+        return {"ok": True, "collection": collection}
+
+    def get_recording_collections(self, name: str) -> dict:
+        bare_name = self._bare_name(name)
+        if not self._sqlite_db_repository.get_recording_by_name(bare_name):
+            return {"ok": False, "error": f"Recording '{bare_name}' not found"}
+        return {
+            "ok": True,
+            "name": bare_name,
+            "collections": self._sqlite_db_repository.get_recording_collections(bare_name),
+        }
+
+    def set_recording_collections(self, name: str, collection_ids: list[int]) -> dict:
+        bare_name = self._bare_name(name)
+        clean_ids = sorted({int(collection_id) for collection_id in collection_ids})
+        updated = self._sqlite_db_repository.set_recording_collections(bare_name, clean_ids)
+        if not updated:
+            return {"ok": False, "error": f"Recording '{bare_name}' not found"}
+        return {
+            "ok": True,
+            "name": bare_name,
+            "collections": self._sqlite_db_repository.get_recording_collections(bare_name),
+        }
+
+    def add_recording_to_collection(self, name: str, collection_id: int) -> dict:
+        bare_name = self._bare_name(name)
+        updated = self._sqlite_db_repository.add_recording_to_collection(bare_name, collection_id)
+        if not updated:
+            return {"ok": False, "error": "Recording or collection not found"}
+        return {"ok": True, "name": bare_name, "collection_id": collection_id}
+
+    def remove_recording_from_collection(self, name: str, collection_id: int) -> dict:
+        bare_name = self._bare_name(name)
+        removed = self._sqlite_db_repository.remove_recording_from_collection(bare_name, collection_id)
+        if not removed:
+            return {"ok": False, "error": "Recording or collection membership not found"}
+        return {"ok": True, "name": bare_name, "collection_id": collection_id}
 
     _DESTINATION_META: dict[str, dict] = {
         "notion": {"label": "Notion", "icon": "bi-journal-bookmark"},
