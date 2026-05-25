@@ -77,6 +77,9 @@ function statusBadge(ok, yesIcon = "bi-check-circle-fill", noIcon = "bi-x-circle
 
 function actionButtons(rec) {
     const btns = [];
+    if (rec.on_local || rec.in_db) {
+        btns.push(`<button class="btn btn-sm btn-outline-dark btn-view-detail" data-name="${rec.name}" title="Open recording details"><i class="bi bi-layout-text-sidebar-reverse"></i></button>`);
+    }
     if (rec.on_local) {
         btns.push(`<button class="btn btn-sm btn-outline-secondary btn-play-audio" data-name="${rec.name}" title="Play audio"><i class="bi bi-play-circle"></i></button>`);
         if (!rec.has_transcript) {
@@ -110,8 +113,19 @@ function actionButtons(rec) {
 function renderTags(tags) {
     if (!tags || tags.length === 0) return '<span class="text-muted">-</span>';
     return tags
-        .map(t => `<span class="badge bg-secondary bg-opacity-25 text-body me-1 mb-1">${t}</span>`)
+        .map(t => `<span class="badge bg-secondary bg-opacity-25 text-body me-1 mb-1">${escapeHtml(t)}</span>`)
         .join("");
+}
+
+function renderCollectionBadges(collections) {
+    if (!collections || collections.length === 0) return '<span class="text-muted">No collections</span>';
+    return collections
+        .map(c => `<span class="badge bg-primary bg-opacity-10 text-primary-emphasis me-1 mb-1">${escapeHtml(c.name)}</span>`)
+        .join("");
+}
+
+function findRecording(name) {
+    return _allRecordings.find(rec => rec.name === name) || null;
 }
 
 function fileTypeBadge(ext) {
@@ -1907,7 +1921,22 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
-        // --- View summary ---
+        // --- View recording detail ---
+        const viewDetailBtn = e.target.closest(".btn-view-detail");
+        if (viewDetailBtn) {
+            e.preventDefault();
+            const name = viewDetailBtn.dataset.name;
+            openSummaryModal(name);
+            try {
+                await renderAndShowRecordingDetail(name);
+            } catch (err) {
+                hide(summaryLoading);
+                summaryError.textContent = `Failed to load recording details: ${err.message}`;
+                show(summaryError);
+            }
+        }
+
+        // --- View summary/details ---
         const viewSummaryBtn = e.target.closest(".btn-view-summary");
         if (viewSummaryBtn) {
             e.preventDefault();
@@ -1915,20 +1944,10 @@ document.addEventListener("DOMContentLoaded", () => {
             openSummaryModal(name);
 
             try {
-                const res = await fetch(`${SUMMARIES_URL}/${encodeURIComponent(name)}`);
-                const data = await res.json();
-
-                hide(summaryLoading);
-                if (data.ok) {
-                    summaryContent.innerHTML = renderSummaryVersions(data.summaries || []);
-                    show(summaryContent);
-                } else {
-                    summaryError.textContent = data.error;
-                    show(summaryError);
-                }
+                await renderAndShowRecordingDetail(name);
             } catch (err) {
                 hide(summaryLoading);
-                summaryError.textContent = `Failed to load summary: ${err.message}`;
+                summaryError.textContent = `Failed to load recording details: ${err.message}`;
                 show(summaryError);
             }
         }
@@ -2087,6 +2106,108 @@ document.addEventListener("DOMContentLoaded", () => {
     const summaryError = $("#summary-error");
     let currentSummaryName = null;
 
+    function renderEmptyDetailState(icon, title, text, actionHtml = "") {
+        return `<div class="recording-detail-empty text-center text-muted">
+            <i class="bi ${icon}"></i>
+            <p class="fw-semibold mb-1">${escapeHtml(title)}</p>
+            <p class="small mb-2">${escapeHtml(text)}</p>
+            ${actionHtml}
+        </div>`;
+    }
+
+    function renderRecordingDetail(name, summaries, transcript) {
+        const rec = findRecording(name) || {};
+        const displayTitle = rec.db_title || rec.db_label || name;
+        const hasLocalAudio = !!rec.on_local;
+        const hasTranscript = !!(transcript && transcript.trim());
+        const summaryVersions = summaries || [];
+        const latestSummary = summaryVersions[0] || null;
+        const tags = rec.db_tags && rec.db_tags.length > 0 ? rec.db_tags : (latestSummary?.tags || []);
+        const collections = rec.collections || [];
+        const recordedParts = [];
+        if (rec.date) recordedParts.push(rec.time ? `${rec.date} ${rec.time}` : rec.date);
+        if (rec.duration) recordedParts.push(formatDuration(rec.duration));
+        if (rec.size) recordedParts.push(formatSize(rec.size));
+        if (rec.file_extension) recordedParts.push(`.${rec.file_extension}`);
+
+        const summaryHtml = summaryVersions.length > 0
+            ? renderSummaryVersions(summaryVersions)
+            : renderEmptyDetailState(
+                "bi-journal-x",
+                "No summary yet",
+                hasTranscript
+                    ? "Generate a summary when you are ready, or keep using the imported transcript as-is."
+                    : "Add or generate a transcript first, then summarize the recording.",
+                hasTranscript
+                    ? `<button class="btn btn-sm btn-outline-warning btn-summarize" data-name="${escapeHtml(name)}">
+                        <i class="bi bi-stars me-1"></i>Summarize
+                    </button>`
+                    : ""
+            );
+
+        const transcriptHtml = hasTranscript
+            ? `<div class="recording-detail-transcript">${formatTranscript(transcript)}</div>
+                <div class="mt-3">
+                    <button class="btn btn-sm btn-outline-secondary btn-view-transcript" data-name="${escapeHtml(name)}">
+                        <i class="bi bi-pencil-square me-1"></i>Edit transcript
+                    </button>
+                </div>`
+            : renderEmptyDetailState(
+                "bi-file-earmark-text",
+                "No transcript yet",
+                hasLocalAudio
+                    ? "Transcribe this recording or import a text file to make it reviewable."
+                    : "No transcript is stored for this recording.",
+                hasLocalAudio
+                    ? `<button class="btn btn-sm btn-outline-primary btn-transcribe" data-name="${escapeHtml(name)}" data-engine="gemini">
+                        <i class="bi bi-mic me-1"></i>Transcribe
+                    </button>`
+                    : ""
+            );
+
+        const audioHtml = hasLocalAudio
+            ? `<audio controls preload="metadata" class="w-100" src="${AUDIO_URL}/${encodeURIComponent(name)}"></audio>`
+            : renderEmptyDetailState("bi-volume-mute", "Audio unavailable", "No local audio file is available for playback.");
+
+        return `<div class="recording-detail">
+            <div class="recording-detail-hero">
+                <div>
+                    <div class="small text-muted mb-1">Recording</div>
+                    <h4 class="mb-1">${escapeHtml(displayTitle)}</h4>
+                    <div class="small text-muted">${recordedParts.map(escapeHtml).join(" · ") || escapeHtml(name)}</div>
+                </div>
+                <div class="recording-detail-actions">
+                    <button class="btn btn-sm btn-outline-primary btn-manage-collections" data-name="${escapeHtml(name)}">
+                        <i class="bi bi-collection me-1"></i>Collections
+                    </button>
+                </div>
+            </div>
+
+            <div class="recording-detail-audio">${audioHtml}</div>
+
+            <div class="recording-detail-meta">
+                <div>
+                    <div class="small text-muted mb-1">Tags</div>
+                    <div>${renderTags(tags)}</div>
+                </div>
+                <div>
+                    <div class="small text-muted mb-1">Collections</div>
+                    <div>${renderCollectionBadges(collections)}</div>
+                </div>
+            </div>
+
+            <details class="recording-detail-section" open>
+                <summary><i class="bi bi-journal-text me-1"></i>Summary</summary>
+                <div class="recording-detail-section-body">${summaryHtml}</div>
+            </details>
+
+            <details class="recording-detail-section" open>
+                <summary><i class="bi bi-file-text me-1"></i>Transcript</summary>
+                <div class="recording-detail-section-body">${transcriptHtml}</div>
+            </details>
+        </div>`;
+    }
+
     function renderSummaryVersions(summaries) {
         return summaries.map((s) => {
             const tags = (s.tags || []).join(", ");
@@ -2146,14 +2267,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function openSummaryModal(name) {
         currentSummaryName = name;
-        summaryName.textContent = name;
+        const rec = findRecording(name);
+        summaryName.textContent = rec?.db_title || rec?.db_label || name;
+        const loadingText = summaryLoading?.querySelector("p");
+        if (loadingText) loadingText.textContent = "Loading recording details…";
         show(summaryLoading);
         hide(summaryContent);
         hide(summaryError);
         show(summaryBackdrop);
     }
 
+    async function renderAndShowRecordingDetail(name) {
+        const [summariesResult, transcriptResult] = await Promise.allSettled([
+            fetch(`${SUMMARIES_URL}/${encodeURIComponent(name)}`).then(res => res.json()),
+            fetch(`${TRANSCRIPT_URL}/${encodeURIComponent(name)}`).then(res => res.json()),
+        ]);
+        const summariesData = summariesResult.status === "fulfilled" ? summariesResult.value : { ok: false };
+        const transcriptData = transcriptResult.status === "fulfilled" ? transcriptResult.value : { ok: false };
+        const summaries = summariesData.ok ? (summariesData.summaries || []) : [];
+        const transcript = transcriptData.ok ? (transcriptData.transcript || "") : "";
+
+        hide(summaryLoading);
+        summaryContent.innerHTML = renderRecordingDetail(name, summaries, transcript);
+        show(summaryContent);
+    }
+
     function closeSummaryModal() {
+        const detailAudio = summaryContent?.querySelector("audio");
+        if (detailAudio) detailAudio.pause();
         hide(summaryBackdrop);
     }
 
@@ -2304,15 +2445,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             hide(summaryLoading);
             if (data.ok) {
-                const summariesRes = await fetch(`${SUMMARIES_URL}/${encodeURIComponent(currentSummarizeName)}`);
-                const summariesData = await summariesRes.json();
-                if (summariesData.ok) {
-                    summaryContent.innerHTML = renderSummaryVersions(summariesData.summaries || []);
-                } else {
-                    summaryContent.innerHTML = formatMarkdown(data.summary);
-                }
-                show(summaryContent);
                 await loadDashboard();
+                await renderAndShowRecordingDetail(currentSummarizeName);
             } else {
                 summaryError.textContent = data.error;
                 show(summaryError);
