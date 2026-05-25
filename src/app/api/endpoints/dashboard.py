@@ -1,9 +1,12 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 
 from app import depends
 from controllers.DashboardController import DashboardController, MIME_TYPES
 from models.dto.DeleteRecordingRequestDTO import DeleteRecordingRequestDTO
+from models.dto.BulkImportRequestDTO import BulkImportConfirmRequestDTO, BulkImportPreviewRequestDTO
 from models.dto.FolderRequestDTO import CreateFolderRequestDTO, RenameFolderRequestDTO, DeleteFolderRequestDTO
 from models.dto.GenerateTasksRequestDTO import GenerateTasksRequestDTO
 from models.dto.MoveRecordingRequestDTO import MoveRecordingRequestDTO, BulkMoveRecordingsRequestDTO
@@ -14,6 +17,7 @@ from models.dto.UpdateRecordingRequestDTO import UpdateRecordingRequestDTO
 from models.dto.UpdateSummaryRequestDTO import UpdateSummaryRequestDTO
 from models.dto.UpdateTaskRequestDTO import UpdateTaskRequestDTO
 from models.dto.UpdateTranscriptRequestDTO import UpdateTranscriptRequestDTO
+from services.BulkImportService import BulkImportService
 
 router = APIRouter()
 
@@ -35,6 +39,74 @@ async def upload_recording(
         raise HTTPException(status_code=400, detail="No file provided")
     file_data = await file.read()
     return dashboard_controller.upload_recording(file.filename, file_data, label)
+
+
+@router.post("/import/preview")
+async def preview_bulk_import(
+    body: BulkImportPreviewRequestDTO,
+    bulk_import_service: BulkImportService = Depends(depends.get_bulk_import_service),
+):
+    return bulk_import_service.preview_folder(
+        folder_path=body.folder_path,
+        recursive=body.recursive,
+    )
+
+
+@router.post("/import/confirm")
+async def confirm_bulk_import(
+    body: BulkImportConfirmRequestDTO,
+    bulk_import_service: BulkImportService = Depends(depends.get_bulk_import_service),
+):
+    return bulk_import_service.confirm_folder(
+        folder_path=body.folder_path,
+        recursive=body.recursive,
+        selected_pair_ids=body.selected_pair_ids,
+    )
+
+
+@router.post("/import/upload-preview")
+async def preview_bulk_import_upload(
+    files: list[UploadFile] = File(...),
+    bulk_import_service: BulkImportService = Depends(depends.get_bulk_import_service),
+):
+    uploaded = await _read_import_uploads(files)
+    return bulk_import_service.preview_upload(uploaded)
+
+
+@router.post("/import/upload-confirm")
+async def confirm_bulk_import_upload(
+    files: list[UploadFile] = File(...),
+    selected_pair_ids: str = Form(""),
+    bulk_import_service: BulkImportService = Depends(depends.get_bulk_import_service),
+):
+    uploaded = await _read_import_uploads(files)
+    return bulk_import_service.confirm_upload(
+        uploaded,
+        selected_pair_ids=_parse_selected_pair_ids(selected_pair_ids),
+    )
+
+
+async def _read_import_uploads(files: list[UploadFile]) -> list[tuple[str, bytes]]:
+    uploaded = []
+    for file in files:
+        if not file.filename:
+            continue
+        uploaded.append((file.filename, await file.read()))
+    if not uploaded:
+        raise HTTPException(status_code=400, detail="No files provided")
+    return uploaded
+
+
+def _parse_selected_pair_ids(raw: str) -> list[str] | None:
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, list):
+        return None
+    return [str(item) for item in parsed]
 
 
 @router.get("/audio/{name}")
@@ -165,7 +237,7 @@ async def delete_recording(
     )
 
 
-# ─── Tasks ───────────────────────────────────────────────────────
+# Tasks
 
 
 @router.post("/tasks/generate")
@@ -203,7 +275,7 @@ async def delete_task(
     return dashboard_controller.delete_task(task_id)
 
 
-# ─── Folders ─────────────────────────────────────────────────────
+# Folders
 
 
 @router.get("/folders")

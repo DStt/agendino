@@ -8,6 +8,11 @@
         <i class="bi bi-upload"></i> Upload
     </a>
 </li>
+<li class="nav-item">
+    <a class="nav-link" href="#" id="btn-bulk-import" role="button" title="Import a local library folder">
+        <i class="bi bi-folder-plus"></i> Bulk Import
+    </a>
+</li>
 <li class="nav-item" id="nav-connect-device">
     <a class="nav-link" href="#" id="btn-connect-device" role="button" title="Pair HiDock device (WebUSB)">
         <i class="bi bi-usb-plug"></i> Connect Device
@@ -115,6 +120,22 @@
                                         </div>
                                         <!-- Recordings table -->
                                         <div class="col table-responsive">
+                                            <div class="recording-filters d-flex flex-wrap gap-2 align-items-center p-3 border-bottom">
+                                                <div class="input-group input-group-sm" style="max-width: 320px;">
+                                                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                                    <input type="search" class="form-control" id="recording-search-input"
+                                                           placeholder="Search title or tags">
+                                                </div>
+                                                <div class="input-group input-group-sm" style="max-width: 210px;">
+                                                    <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
+                                                    <input type="date" class="form-control" id="recording-date-filter">
+                                                </div>
+                                                <button class="btn btn-sm btn-outline-secondary" id="recording-filter-clear"
+                                                        type="button" title="Clear filters">
+                                                    <i class="bi bi-x-lg"></i>
+                                                </button>
+                                                <span id="recording-filter-count" class="small text-muted ms-auto"></span>
+                                            </div>
                                             <div id="loading" class="text-center p-4">
                                                 <div class="spinner-border text-primary" role="status">
                                                     <span class="visually-hidden">Loading…</span>
@@ -394,6 +415,65 @@
                     <p class="mt-2 text-muted">Uploading…</p>
                 </div>
                 <div id="upload-result" class="d-none mt-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Import Modal -->
+    <div id="bulk-import-modal-backdrop" class="transcript-modal-backdrop d-none">
+        <div class="transcript-modal" style="max-width: 760px;">
+            <div class="transcript-modal-header" style="background: var(--bs-success);">
+                <h5 class="mb-0"><i class="bi bi-folder-plus me-2"></i>Import Recordings</h5>
+                <button type="button" class="btn-close btn-close-white" id="bulk-import-modal-close"></button>
+            </div>
+            <div class="transcript-modal-body">
+                <div id="bulk-import-form-section">
+                    <div class="btn-group w-100 mb-3" role="group" aria-label="Import mode">
+                        <input type="radio" class="btn-check" name="bulk-import-mode" id="bulk-import-mode-upload"
+                               value="upload" autocomplete="off" checked>
+                        <label class="btn btn-outline-success" for="bulk-import-mode-upload">
+                            <i class="bi bi-files me-1"></i>Manual Upload
+                        </label>
+                        <input type="radio" class="btn-check" name="bulk-import-mode" id="bulk-import-mode-folder"
+                               value="folder" autocomplete="off">
+                        <label class="btn btn-outline-success" for="bulk-import-mode-folder">
+                            <i class="bi bi-folder2-open me-1"></i>Folder Import
+                        </label>
+                    </div>
+
+                    <div id="bulk-import-upload-panel">
+                        <div class="mb-3">
+                            <label for="bulk-import-files-input" class="form-label">Audio and transcript files</label>
+                            <input type="file" class="form-control" id="bulk-import-files-input"
+                                   accept=".mp3,.txt" multiple>
+                            <div class="form-text">Select one .mp3 and one .txt per recording.</div>
+                        </div>
+                    </div>
+
+                    <div id="bulk-import-folder-panel" class="d-none">
+                        <div class="mb-3">
+                            <label for="bulk-import-folder-input" class="form-label">Local folder path</label>
+                            <input type="text" class="form-control" id="bulk-import-folder-input"
+                                   placeholder="/Users/you/Recordings/HiNotes">
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="bulk-import-recursive">
+                            <label class="form-check-label" for="bulk-import-recursive">Include subfolders</label>
+                        </div>
+                    </div>
+
+                    <div class="text-end">
+                        <button class="btn btn-outline-secondary me-2" id="bulk-import-cancel-btn">Cancel</button>
+                        <button class="btn btn-success" id="bulk-import-preview-btn">
+                            <i class="bi bi-search me-1"></i>Preview
+                        </button>
+                    </div>
+                </div>
+                <div id="bulk-import-loading" class="text-center p-4 d-none">
+                    <div class="spinner-border text-success" role="status"></div>
+                    <p class="mt-2 text-muted">Scanning library…</p>
+                </div>
+                <div id="bulk-import-result" class="mt-3 d-none"></div>
             </div>
         </div>
     </div>

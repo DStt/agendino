@@ -1,4 +1,3 @@
-import os
 import logging
 from pathlib import Path
 from google import genai
@@ -26,9 +25,6 @@ Output format:
 [00:15] Speaker 2: ...
 """
 
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
-
-
 class TranscriptionService:
     def __init__(self, api_key: str, model: str):
         self._client = genai.Client(api_key=api_key)
@@ -49,7 +45,7 @@ class TranscriptionService:
         logger.info("Uploaded (%s). Transcribing…", uploaded.name)
 
         response = self._client.models.generate_content(
-            model=MODEL,
+            model=self._model,
             contents=[uploaded, TRANSCRIPTION_PROMPT],
         )
         return response.text

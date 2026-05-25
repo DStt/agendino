@@ -19,6 +19,10 @@ const DELETE_RECORDING_URL = "/api/dashboard/recording";
 const TASKS_GENERATE_URL = "/api/dashboard/tasks/generate";
 const TASKS_URL = "/api/dashboard/tasks";
 const UPLOAD_URL = "/api/dashboard/upload";
+const BULK_IMPORT_PREVIEW_URL = "/api/dashboard/import/preview";
+const BULK_IMPORT_CONFIRM_URL = "/api/dashboard/import/confirm";
+const BULK_IMPORT_UPLOAD_PREVIEW_URL = "/api/dashboard/import/upload-preview";
+const BULK_IMPORT_UPLOAD_CONFIRM_URL = "/api/dashboard/import/upload-confirm";
 const RECORDING_UPDATE_URL = "/api/dashboard/recording";
 const FOLDERS_URL = "/api/dashboard/folders";
 const MOVE_RECORDING_URL = "/api/dashboard/recording";
@@ -32,6 +36,7 @@ let _cachedDeviceData = null; // { info, files, storage } from last device probe
 let _currentFolder = null;   // null = "All", "/" = root only, "/path" = specific folder
 let _allRecordings = [];     // all recordings from last fetch
 let _allFolders = [];        // all folder paths from last fetch
+let _recordingFilters = { query: "", date: "" };
 
 function formatDuration(seconds) {
     if (seconds == null) return "-";
@@ -61,13 +66,7 @@ function actionButtons(rec) {
     const btns = [];
     if (rec.on_local) {
         btns.push(`<button class="btn btn-sm btn-outline-secondary btn-play-audio" data-name="${rec.name}" title="Play audio"><i class="bi bi-play-circle"></i></button>`);
-        if (rec.has_transcript) {
-            btns.push(`<button class="btn btn-sm btn-outline-success btn-view-transcript" data-name="${rec.name}" title="View transcript"><i class="bi bi-file-text"></i></button>`);
-            if (rec.has_summary) {
-                    btns.push(`<button class="btn btn-sm btn-outline-info btn-view-summary" data-name="${rec.name}" title="View summaries"><i class="bi bi-journal-text"></i></button>`);
-            }
-            btns.push(`<button class="btn btn-sm btn-outline-warning btn-summarize" data-name="${rec.name}" title="Summarize"><i class="bi bi-stars"></i></button>`);
-        } else {
+        if (!rec.has_transcript) {
             btns.push(`<div class="btn-group btn-group-sm transcribe-split" style="position:relative">
                 <button class="btn btn-outline-primary btn-transcribe" data-name="${rec.name}" data-engine="gemini" title="Transcribe with Gemini"><i class="bi bi-mic"></i></button>
                 <button type="button" class="btn btn-outline-primary btn-transcribe-toggle" data-name="${rec.name}" title="Choose engine" style="padding-left:3px;padding-right:3px;border-left:0"><i class="bi bi-caret-down-fill" style="font-size:.55em"></i></button>
@@ -77,6 +76,13 @@ function actionButtons(rec) {
                 </div>
             </div>`);
         }
+    }
+    if (rec.has_transcript) {
+        btns.push(`<button class="btn btn-sm btn-outline-success btn-view-transcript" data-name="${rec.name}" title="View transcript"><i class="bi bi-file-text"></i></button>`);
+        btns.push(`<button class="btn btn-sm btn-outline-warning btn-summarize" data-name="${rec.name}" title="Summarize"><i class="bi bi-stars"></i></button>`);
+    }
+    if (rec.has_summary) {
+        btns.push(`<button class="btn btn-sm btn-outline-info btn-view-summary" data-name="${rec.name}" title="View summaries"><i class="bi bi-journal-text"></i></button>`);
     }
     if (rec.in_db) {
         btns.push(`<button class="btn btn-sm btn-outline-primary btn-move-recording" data-name="${rec.name}" title="Move to folder"><i class="bi bi-folder-symlink"></i></button>`);
@@ -352,6 +358,27 @@ function filterRecordingsByFolder(recordings, folderPath) {
     });
 }
 
+function filterRecordingsBySearch(recordings) {
+    const query = (_recordingFilters.query || "").trim().toLowerCase();
+    const date = _recordingFilters.date || "";
+    return recordings.filter(rec => {
+        if (query) {
+            const title = (rec.db_title || rec.db_label || rec.name || "").toLowerCase();
+            const tags = (rec.db_tags || []).join(" ").toLowerCase();
+            if (!title.includes(query) && !tags.includes(query)) return false;
+        }
+        if (date && rec.date !== date) return false;
+        return true;
+    });
+}
+
+function updateFilterCount(total, filtered) {
+    const el = $("#recording-filter-count");
+    if (!el) return;
+    const hasFilters = Boolean(_recordingFilters.query || _recordingFilters.date);
+    el.textContent = hasFilters ? `${filtered} of ${total}` : "";
+}
+
 function updateBulkActionsBar() {
     const bar = $("#bulk-actions-bar");
     const countEl = $("#bulk-selected-count");
@@ -370,12 +397,15 @@ function renderFilteredTable() {
     const tbody = $("#recordings-body");
     const emptyEl = $("#empty-state");
 
-    const filtered = filterRecordingsByFolder(_allRecordings, _currentFolder);
+    const folderFiltered = filterRecordingsByFolder(_allRecordings, _currentFolder);
+    const filtered = filterRecordingsBySearch(folderFiltered);
     renderBreadcrumb(_currentFolder);
+    updateFilterCount(folderFiltered.length, filtered.length);
 
     if (filtered.length === 0) {
         hide(table);
         show(emptyEl);
+        hide($("#bulk-actions-bar"));
         return;
     }
 
@@ -484,6 +514,32 @@ function hideSyncOverlay() {
 
 document.addEventListener("DOMContentLoaded", () => {
     loadDashboard();
+
+    const recordingSearchInput = $("#recording-search-input");
+    const recordingDateFilter = $("#recording-date-filter");
+    const recordingFilterClear = $("#recording-filter-clear");
+
+    if (recordingSearchInput) {
+        recordingSearchInput.addEventListener("input", () => {
+            _recordingFilters.query = recordingSearchInput.value;
+            renderFilteredTable();
+        });
+    }
+    if (recordingDateFilter) {
+        recordingDateFilter.addEventListener("change", () => {
+            _recordingFilters.date = recordingDateFilter.value;
+            renderFilteredTable();
+        });
+    }
+    if (recordingFilterClear) {
+        recordingFilterClear.addEventListener("click", (e) => {
+            e.preventDefault();
+            _recordingFilters = { query: "", date: "" };
+            if (recordingSearchInput) recordingSearchInput.value = "";
+            if (recordingDateFilter) recordingDateFilter.value = "";
+            renderFilteredTable();
+        });
+    }
 
     // ─── Folder tree click handler ──────────────────────────────
     document.addEventListener("click", (e) => {
@@ -1047,6 +1103,274 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
+
+    // --- Bulk import modal ---
+    const bulkImportBtn = $("#btn-bulk-import");
+    const bulkImportBackdrop = $("#bulk-import-modal-backdrop");
+    const bulkImportClose = $("#bulk-import-modal-close");
+    const bulkImportCancel = $("#bulk-import-cancel-btn");
+    const bulkImportModeUpload = $("#bulk-import-mode-upload");
+    const bulkImportModeFolder = $("#bulk-import-mode-folder");
+    const bulkImportUploadPanel = $("#bulk-import-upload-panel");
+    const bulkImportFolderPanel = $("#bulk-import-folder-panel");
+    const bulkImportFilesInput = $("#bulk-import-files-input");
+    const bulkImportFolderInput = $("#bulk-import-folder-input");
+    const bulkImportRecursive = $("#bulk-import-recursive");
+    const bulkImportPreviewBtn = $("#bulk-import-preview-btn");
+    const bulkImportFormSection = $("#bulk-import-form-section");
+    const bulkImportLoading = $("#bulk-import-loading");
+    const bulkImportResult = $("#bulk-import-result");
+    let _bulkImportPreview = null;
+    let _bulkImportMode = "upload";
+
+    function openBulkImportModal() {
+        _bulkImportMode = "upload";
+        if (bulkImportModeUpload) bulkImportModeUpload.checked = true;
+        if (bulkImportModeFolder) bulkImportModeFolder.checked = false;
+        if (bulkImportFilesInput) bulkImportFilesInput.value = "";
+        if (bulkImportFolderInput) bulkImportFolderInput.value = "";
+        if (bulkImportRecursive) bulkImportRecursive.checked = false;
+        _bulkImportPreview = null;
+        updateBulkImportMode();
+        show(bulkImportFormSection);
+        hide(bulkImportLoading);
+        hide(bulkImportResult);
+        show(bulkImportBackdrop);
+        bulkImportFilesInput?.focus();
+    }
+
+    function closeBulkImportModal() {
+        hide(bulkImportBackdrop);
+    }
+
+    function updateBulkImportMode() {
+        _bulkImportMode = bulkImportModeFolder?.checked ? "folder" : "upload";
+        if (_bulkImportMode === "folder") {
+            hide(bulkImportUploadPanel);
+            show(bulkImportFolderPanel);
+            bulkImportFolderInput?.focus();
+        } else {
+            show(bulkImportUploadPanel);
+            hide(bulkImportFolderPanel);
+            bulkImportFilesInput?.focus();
+        }
+    }
+
+    function bulkImportFolderPayload() {
+        return {
+            folder_path: (bulkImportFolderInput?.value || "").trim(),
+            recursive: !!bulkImportRecursive?.checked,
+        };
+    }
+
+    function bulkImportUploadFormData(selectedPairIds = null) {
+        const formData = new FormData();
+        Array.from(bulkImportFilesInput?.files || []).forEach(file => formData.append("files", file));
+        if (selectedPairIds) formData.append("selected_pair_ids", JSON.stringify(selectedPairIds));
+        return formData;
+    }
+
+    function renderBulkImportPreview(data) {
+        const counts = data.counts || {};
+        const pairs = data.pairs || [];
+        const importable = pairs.filter(p => p.status !== "skipped duplicate");
+        const duplicates = pairs.filter(p => p.status === "skipped duplicate");
+        const unmatched = data.unmatched || [];
+        const unsupported = data.unsupported || [];
+        const errors = data.errors || [];
+
+        let html = `
+            <div class="alert alert-info py-2">
+                Pairs: <strong>${counts.pairs || 0}</strong> ·
+                Importable: <strong>${counts.importable || 0}</strong> ·
+                Duplicates: <strong>${counts.duplicates || 0}</strong> ·
+                Unmatched: <strong>${counts.unmatched || 0}</strong> ·
+                Unsupported: <strong>${counts.unsupported || 0}</strong> ·
+                Errors: <strong>${counts.errors || 0}</strong>
+            </div>`;
+
+        if (importable.length > 0) {
+            html += `<div class="table-responsive" style="max-height: 320px; overflow:auto;">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="bulk-import-select-all" checked></th>
+                            <th>Audio</th>
+                            <th>Matched Text</th>
+                            <th>Title</th>
+                            <th>Transcript</th>
+                            <th>Summary</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            for (const item of importable) {
+                html += `<tr>
+                    <td><input type="checkbox" class="bulk-import-item" data-pair-id="${item.pair_id}" checked></td>
+                    <td><span class="fw-semibold">${item.audio_file}</span></td>
+                    <td>${item.text_file}</td>
+                    <td>${item.detected_title}</td>
+                    <td><span class="badge bg-success">${item.transcript_status}</span></td>
+                    <td><span class="badge ${item.summary_status === "needs review" ? "bg-warning text-dark" : "bg-success"}">${item.summary_status}</span></td>
+                    <td><span class="badge ${item.status === "needs review" ? "bg-warning text-dark" : "bg-primary"}">${item.status}</span></td>
+                </tr>`;
+            }
+            html += `</tbody></table></div>
+                <div class="text-end mt-3">
+                    <button class="btn btn-outline-secondary me-2" id="bulk-import-back-btn">Back</button>
+                    <button class="btn btn-success" id="bulk-import-confirm-btn">
+                        <i class="bi bi-folder-check me-1"></i>Confirm Import
+                    </button>
+                </div>`;
+        } else {
+            html += `<div class="alert alert-warning">No new supported files are ready to import.</div>
+                <div class="text-end">
+                    <button class="btn btn-outline-secondary" id="bulk-import-back-btn">Back</button>
+                </div>`;
+        }
+
+        const skipped = [...duplicates, ...unmatched, ...unsupported, ...errors];
+        if (skipped.length > 0) {
+            html += `<details class="mt-3"><summary class="small text-muted">Skipped and duplicate files</summary>
+                <ul class="small mt-2">`;
+            for (const item of skipped.slice(0, 50)) {
+                const label = item.audio_file || item.filename || item.text_file || item.pair_id || "Item";
+                html += `<li><strong>${label}</strong>: ${item.reason || item.error || item.status || "Skipped"}</li>`;
+            }
+            if (skipped.length > 50) html += `<li>…and ${skipped.length - 50} more</li>`;
+            html += `</ul></details>`;
+        }
+
+        bulkImportResult.innerHTML = html;
+        show(bulkImportResult);
+    }
+
+    if (bulkImportBtn) {
+        bulkImportBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            openBulkImportModal();
+        });
+    }
+    if (bulkImportClose) bulkImportClose.addEventListener("click", closeBulkImportModal);
+    if (bulkImportCancel) bulkImportCancel.addEventListener("click", closeBulkImportModal);
+    if (bulkImportBackdrop) {
+        bulkImportBackdrop.addEventListener("click", (e) => {
+            if (e.target === bulkImportBackdrop) closeBulkImportModal();
+        });
+    }
+    if (bulkImportModeUpload) bulkImportModeUpload.addEventListener("change", updateBulkImportMode);
+    if (bulkImportModeFolder) bulkImportModeFolder.addEventListener("change", updateBulkImportMode);
+
+    if (bulkImportPreviewBtn) {
+        bulkImportPreviewBtn.addEventListener("click", async () => {
+            const isFolderMode = _bulkImportMode === "folder";
+            const payload = isFolderMode ? bulkImportFolderPayload() : null;
+            if (isFolderMode && !payload.folder_path) {
+                bulkImportResult.className = "alert alert-danger mt-3";
+                bulkImportResult.textContent = "Enter a folder path first.";
+                show(bulkImportResult);
+                return;
+            }
+            if (!isFolderMode && (!bulkImportFilesInput?.files || bulkImportFilesInput.files.length === 0)) {
+                bulkImportResult.className = "alert alert-danger mt-3";
+                bulkImportResult.textContent = "Choose .mp3 and .txt files first.";
+                show(bulkImportResult);
+                return;
+            }
+
+            hide(bulkImportFormSection);
+            hide(bulkImportResult);
+            show(bulkImportLoading);
+
+            try {
+                const res = isFolderMode
+                    ? await fetch(BULK_IMPORT_PREVIEW_URL, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                    })
+                    : await fetch(BULK_IMPORT_UPLOAD_PREVIEW_URL, {
+                        method: "POST",
+                        body: bulkImportUploadFormData(),
+                    });
+                const data = await res.json();
+                hide(bulkImportLoading);
+                if (!data.ok) {
+                    bulkImportResult.className = "alert alert-danger mt-3";
+                    bulkImportResult.textContent = data.error || "Preview failed";
+                    show(bulkImportResult);
+                    show(bulkImportFormSection);
+                    return;
+                }
+                _bulkImportPreview = data;
+                bulkImportResult.className = "mt-3";
+                renderBulkImportPreview(data);
+            } catch (err) {
+                hide(bulkImportLoading);
+                bulkImportResult.className = "alert alert-danger mt-3";
+                bulkImportResult.textContent = `Preview failed: ${err.message}`;
+                show(bulkImportResult);
+                show(bulkImportFormSection);
+            }
+        });
+    }
+
+    document.addEventListener("change", (e) => {
+        if (e.target.id === "bulk-import-select-all") {
+            document.querySelectorAll(".bulk-import-item").forEach(cb => cb.checked = e.target.checked);
+        }
+    });
+
+    document.addEventListener("click", async (e) => {
+        const backBtn = e.target.closest("#bulk-import-back-btn");
+        if (backBtn) {
+            e.preventDefault();
+            hide(bulkImportResult);
+            show(bulkImportFormSection);
+            return;
+        }
+
+        const confirmBtn = e.target.closest("#bulk-import-confirm-btn");
+        if (!confirmBtn || !_bulkImportPreview) return;
+        e.preventDefault();
+
+        const selectedPairIds = Array.from(document.querySelectorAll(".bulk-import-item:checked"))
+            .map(cb => cb.dataset.pairId);
+        const isFolderMode = _bulkImportPreview.mode === "folder";
+
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importing…';
+
+        try {
+            const res = isFolderMode
+                ? await fetch(BULK_IMPORT_CONFIRM_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        ...bulkImportFolderPayload(),
+                        selected_pair_ids: selectedPairIds,
+                    }),
+                })
+                : await fetch(BULK_IMPORT_UPLOAD_CONFIRM_URL, {
+                    method: "POST",
+                    body: bulkImportUploadFormData(selectedPairIds),
+                });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || "Import failed");
+            const counts = data.counts || {};
+            bulkImportResult.className = "alert alert-success mt-3";
+            bulkImportResult.innerHTML = `<i class="bi bi-check-circle me-1"></i>
+                Imported ${counts.imported || 0}; duplicates ${counts.skipped_duplicate || 0}; errors ${counts.errors || 0}.`;
+            await loadDashboard();
+            setTimeout(closeBulkImportModal, 1400);
+        } catch (err) {
+            bulkImportResult.className = "alert alert-danger mt-3";
+            bulkImportResult.textContent = `Import failed: ${err.message}`;
+            show(bulkImportResult);
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="bi bi-folder-check me-1"></i>Confirm Import';
+        }
+    });
 
     // --- Audio player modal ---
     const audioBackdrop = $("#audio-modal-backdrop");
