@@ -8,4 +8,3 @@ class CreateCollectionRequestDTO(BaseModel):
 
 class SetRecordingCollectionsRequestDTO(BaseModel):
     collection_ids: list[int]
-

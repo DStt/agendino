@@ -25,6 +25,7 @@ Output format:
 [00:15] Speaker 2: ...
 """
 
+
 class TranscriptionService:
     def __init__(self, api_key: str, model: str):
         self._client = genai.Client(api_key=api_key)

@@ -495,14 +495,17 @@ class SqliteDBRepository:
     def get_recording_collections(self, name: str) -> list[dict]:
         conn = self._connect()
         try:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT c.id, c.name, c.description, c.created_at
                 FROM recording_collection rc
                 JOIN recording r ON r.id = rc.recording_id
                 JOIN collection c ON c.id = rc.collection_id
                 WHERE r.name = ?
                 ORDER BY lower(c.name)
-            """, (name,)).fetchall()
+            """,
+                (name,),
+            ).fetchall()
             return [
                 {
                     "id": row["id"],

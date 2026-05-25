@@ -12,7 +12,6 @@ from models.DBRecording import DBRecording
 from repositories.LocalRecordingsRepository import LocalRecordingsRepository
 from repositories.SqliteDBRepository import SqliteDBRepository
 
-
 AUDIO_EXTENSIONS = {".mp3"}
 TEXT_EXTENSIONS = {".txt"}
 SUPPORTED_EXTENSIONS = AUDIO_EXTENSIONS | TEXT_EXTENSIONS
@@ -325,9 +324,9 @@ class BulkImportService:
             summary=parsed["summary"] or SUMMARY_NEEDS_REVIEW,
             title=pair["detected_title"],
             tags="needs-review" if parsed["summary_status"] == PAIR_STATUS_NEEDS_REVIEW else "",
-            prompt_id="bulk_import_needs_review"
-            if parsed["summary_status"] == PAIR_STATUS_NEEDS_REVIEW
-            else "bulk_import",
+            prompt_id=(
+                "bulk_import_needs_review" if parsed["summary_status"] == PAIR_STATUS_NEEDS_REVIEW else "bulk_import"
+            ),
         )
 
         return {
