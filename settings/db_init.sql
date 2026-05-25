@@ -28,6 +28,27 @@ CREATE TABLE IF NOT EXISTS summary
 
 CREATE INDEX IF NOT EXISTS idx_summary_recording_id ON summary (recording_id);
 
+CREATE TABLE IF NOT EXISTS collection
+(
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    NOT NULL UNIQUE,
+    description TEXT    DEFAULT NULL,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS recording_collection
+(
+    recording_id  INTEGER NOT NULL,
+    collection_id INTEGER NOT NULL,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (recording_id, collection_id),
+    FOREIGN KEY (recording_id) REFERENCES recording (id) ON DELETE CASCADE,
+    FOREIGN KEY (collection_id) REFERENCES collection (id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_recording_collection_recording ON recording_collection (recording_id);
+CREATE INDEX IF NOT EXISTS idx_recording_collection_collection ON recording_collection (collection_id);
+
 CREATE TABLE IF NOT EXISTS task
 (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,4 +128,3 @@ CREATE TABLE IF NOT EXISTS daily_recap
 );
 
 CREATE INDEX IF NOT EXISTS idx_daily_recap_date ON daily_recap (date);
-

@@ -467,6 +467,49 @@
     padding-left: .75rem;
 }
 
+.collection-tree-item {
+    display: flex;
+    align-items: center;
+    padding: .3rem .75rem;
+    cursor: pointer;
+    transition: background .1s;
+    user-select: none;
+    border-left: 3px solid transparent;
+    gap: .35rem;
+}
+.collection-tree-item:hover {
+    background: var(--bs-body-bg);
+}
+.collection-tree-item.active {
+    background: var(--bs-primary-bg-subtle, #cfe2ff);
+    border-left-color: var(--bs-primary);
+    font-weight: 600;
+}
+.collection-tree-item .collection-icon {
+    font-size: .9rem;
+    color: var(--bs-primary);
+    flex-shrink: 0;
+}
+.collection-tree-item .collection-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.collection-tree-item .collection-count {
+    font-size: .72rem;
+    color: var(--bs-secondary-color);
+    flex-shrink: 0;
+}
+.collection-checkbox-list {
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    padding: .75rem;
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--bs-tertiary-bg);
+}
+
 /* Move-to-folder modal tree */
 .move-folder-tree {
     border: 1px solid var(--bs-border-color);

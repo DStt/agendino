@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 
 from app import depends
 from controllers.DashboardController import DashboardController, MIME_TYPES
+from models.dto.CollectionRequestDTO import CreateCollectionRequestDTO, SetRecordingCollectionsRequestDTO
 from models.dto.DeleteRecordingRequestDTO import DeleteRecordingRequestDTO
 from models.dto.BulkImportRequestDTO import BulkImportConfirmRequestDTO, BulkImportPreviewRequestDTO
 from models.dto.FolderRequestDTO import CreateFolderRequestDTO, RenameFolderRequestDTO, DeleteFolderRequestDTO
@@ -273,6 +274,59 @@ async def delete_task(
     dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
 ):
     return dashboard_controller.delete_task(task_id)
+
+
+# Collections
+
+
+@router.get("/collections")
+async def get_collections(
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.get_collections()
+
+
+@router.post("/collections")
+async def create_collection(
+    body: CreateCollectionRequestDTO,
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.create_collection(body.name, body.description)
+
+
+@router.get("/recording/{name}/collections")
+async def get_recording_collections(
+    name: str,
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.get_recording_collections(name)
+
+
+@router.patch("/recording/{name}/collections")
+async def set_recording_collections(
+    name: str,
+    body: SetRecordingCollectionsRequestDTO,
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.set_recording_collections(name, body.collection_ids)
+
+
+@router.post("/recording/{name}/collections/{collection_id}")
+async def add_recording_to_collection(
+    name: str,
+    collection_id: int,
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.add_recording_to_collection(name, collection_id)
+
+
+@router.delete("/recording/{name}/collections/{collection_id}")
+async def remove_recording_from_collection(
+    name: str,
+    collection_id: int,
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.remove_recording_from_collection(name, collection_id)
 
 
 # Folders

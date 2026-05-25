@@ -27,15 +27,28 @@ const RECORDING_UPDATE_URL = "/api/dashboard/recording";
 const FOLDERS_URL = "/api/dashboard/folders";
 const MOVE_RECORDING_URL = "/api/dashboard/recording";
 const BULK_MOVE_URL = "/api/dashboard/recordings/move";
+const COLLECTIONS_URL = "/api/dashboard/collections";
+const RECORDING_COLLECTIONS_URL = "/api/dashboard/recording";
 
 const show = (el) => el?.classList.remove("d-none");
 const hide = (el) => el?.classList.add("d-none");
 
+function escapeHtml(text) {
+    return (text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
 // ─── WebUSB device state ────────────────────────────────────────
 let _cachedDeviceData = null; // { info, files, storage } from last device probe
 let _currentFolder = null;   // null = "All", "/" = root only, "/path" = specific folder
+let _currentCollection = null; // null = all collections; number = collection id
 let _allRecordings = [];     // all recordings from last fetch
 let _allFolders = [];        // all folder paths from last fetch
+let _allCollections = [];    // all collections from last fetch
 let _recordingFilters = { query: "", date: "" };
 
 function formatDuration(seconds) {
@@ -86,6 +99,7 @@ function actionButtons(rec) {
     }
     if (rec.in_db) {
         btns.push(`<button class="btn btn-sm btn-outline-primary btn-move-recording" data-name="${rec.name}" title="Move to folder"><i class="bi bi-folder-symlink"></i></button>`);
+        btns.push(`<button class="btn btn-sm btn-outline-primary btn-manage-collections" data-name="${rec.name}" title="Add to collection"><i class="bi bi-collection"></i></button>`);
     }
     if (rec.on_device || rec.on_local || rec.in_db) {
         btns.push(`<button class="btn btn-sm btn-outline-danger btn-delete-recording" data-name="${rec.name}" data-on-device="${rec.on_device}" data-on-local="${rec.on_local}" data-in-db="${rec.in_db}" title="Delete recording…"><i class="bi bi-trash3"></i></button>`);
@@ -221,6 +235,8 @@ function mergeDeviceData(serverData, deviceData) {
                 summary_count: 0,
                 notion_url: null,
                 folder: "/",
+                collections: [],
+                collection_ids: [],
             });
         }
     }
@@ -323,15 +339,60 @@ function renderFolderTree(folders, recordings) {
     treeEl.innerHTML = renderFolderTreeNode(tree, recordings);
 }
 
+function countRecordingsInCollection(recordings, collectionId) {
+    if (collectionId === null) return recordings.length;
+    return recordings.filter(r => (r.collection_ids || []).includes(collectionId)).length;
+}
+
+function renderCollectionTree(collections, recordings) {
+    const treeEl = $("#collection-tree");
+    if (!treeEl) return;
+
+    const allActive = _currentCollection === null;
+    let html = `<div class="collection-tree-item ${allActive ? 'active' : ''}" data-collection-id="">
+        <i class="bi bi-collection collection-icon"></i>
+        <span class="collection-name" title="All recordings">All</span>
+        <span class="collection-count">${recordings.length}</span>
+    </div>`;
+
+    if (!collections || collections.length === 0) {
+        html += `<div class="small text-muted px-3 py-2">No collections yet.</div>`;
+        treeEl.innerHTML = html;
+        return;
+    }
+
+    html += collections.map(collection => {
+        const id = Number(collection.id);
+        const isActive = _currentCollection === id;
+        const count = countRecordingsInCollection(recordings, id);
+        return `<div class="collection-tree-item ${isActive ? 'active' : ''}" data-collection-id="${id}">
+            <i class="bi bi-bookmark collection-icon"></i>
+            <span class="collection-name" title="${escapeHtml(collection.description || collection.name)}">${escapeHtml(collection.name)}</span>
+            <span class="collection-count">${count}</span>
+        </div>`;
+    }).join("");
+    treeEl.innerHTML = html;
+}
+
+function currentCollectionName() {
+    if (_currentCollection === null) return null;
+    const collection = _allCollections.find(c => Number(c.id) === _currentCollection);
+    return collection ? collection.name : null;
+}
+
 function renderBreadcrumb(folderPath) {
     const el = $("#folder-breadcrumb");
     if (!el) return;
+    const collectionName = currentCollectionName();
+    const collectionSuffix = collectionName
+        ? ` <span class="text-muted">in</span> <strong><i class="bi bi-collection me-1"></i>${escapeHtml(collectionName)}</strong>`
+        : "";
     if (folderPath === null) {
-        el.innerHTML = '<i class="bi bi-collection me-1"></i>All recordings';
+        el.innerHTML = `<i class="bi bi-collection me-1"></i>All recordings${collectionSuffix}`;
         return;
     }
     if (folderPath === "/") {
-        el.innerHTML = '<span class="breadcrumb-part" data-folder-path="null"><i class="bi bi-collection me-1"></i>All</span> / <strong>/</strong>';
+        el.innerHTML = `<span class="breadcrumb-part" data-folder-path="null"><i class="bi bi-collection me-1"></i>All</span> / <strong>/</strong>${collectionSuffix}`;
         return;
     }
     const parts = folderPath.split("/").filter(p => p);
@@ -346,7 +407,7 @@ function renderBreadcrumb(folderPath) {
             html += ` / <span class="breadcrumb-part" data-folder-path="${built}">${parts[i]}</span>`;
         }
     }
-    el.innerHTML = html;
+    el.innerHTML = html + collectionSuffix;
 }
 
 function filterRecordingsByFolder(recordings, folderPath) {
@@ -356,6 +417,11 @@ function filterRecordingsByFolder(recordings, folderPath) {
         if (folderPath === "/") return rf === "/";
         return rf === folderPath || rf.startsWith(folderPath + "/");
     });
+}
+
+function filterRecordingsByCollection(recordings, collectionId) {
+    if (collectionId === null) return recordings;
+    return recordings.filter(r => (r.collection_ids || []).includes(collectionId));
 }
 
 function filterRecordingsBySearch(recordings) {
@@ -375,7 +441,7 @@ function filterRecordingsBySearch(recordings) {
 function updateFilterCount(total, filtered) {
     const el = $("#recording-filter-count");
     if (!el) return;
-    const hasFilters = Boolean(_recordingFilters.query || _recordingFilters.date);
+    const hasFilters = Boolean(_recordingFilters.query || _recordingFilters.date || _currentCollection !== null);
     el.textContent = hasFilters ? `${filtered} of ${total}` : "";
 }
 
@@ -398,7 +464,8 @@ function renderFilteredTable() {
     const emptyEl = $("#empty-state");
 
     const folderFiltered = filterRecordingsByFolder(_allRecordings, _currentFolder);
-    const filtered = filterRecordingsBySearch(folderFiltered);
+    const collectionFiltered = filterRecordingsByCollection(folderFiltered, _currentCollection);
+    const filtered = filterRecordingsBySearch(collectionFiltered);
     renderBreadcrumb(_currentFolder);
     updateFilterCount(folderFiltered.length, filtered.length);
 
@@ -448,6 +515,7 @@ async function loadDashboard() {
         // Store globally for folder filtering
         _allRecordings = data.recordings || [];
         _allFolders = data.folders || ["/"];
+        _allCollections = data.collections || [];
 
         // Update status cards
         $("#count-device").textContent = data.counts.device;
@@ -480,6 +548,7 @@ async function loadDashboard() {
 
         // Render folder tree
         renderFolderTree(_allFolders, _allRecordings);
+        renderCollectionTree(_allCollections, _allRecordings);
 
         // Render table (filtered by current folder)
         hide(loading);
@@ -535,8 +604,10 @@ document.addEventListener("DOMContentLoaded", () => {
         recordingFilterClear.addEventListener("click", (e) => {
             e.preventDefault();
             _recordingFilters = { query: "", date: "" };
+            _currentCollection = null;
             if (recordingSearchInput) recordingSearchInput.value = "";
             if (recordingDateFilter) recordingDateFilter.value = "";
+            renderCollectionTree(_allCollections, _allRecordings);
             renderFilteredTable();
         });
     }
@@ -550,6 +621,16 @@ document.addEventListener("DOMContentLoaded", () => {
             const path = folderItem.dataset.folderPath;
             _currentFolder = path === "null" ? null : path;
             renderFolderTree(_allFolders, _allRecordings);
+            renderFilteredTable();
+            return;
+        }
+
+        const collectionItem = e.target.closest(".collection-tree-item");
+        if (collectionItem) {
+            e.preventDefault();
+            const id = collectionItem.dataset.collectionId;
+            _currentCollection = id ? Number(id) : null;
+            renderCollectionTree(_allCollections, _allRecordings);
             renderFilteredTable();
             return;
         }
@@ -697,6 +778,172 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
+
+    // ─── Collections ─────────────────────────────────────────────
+    const createCollectionBtn = $("#btn-create-collection");
+    const collectionModalBackdrop = $("#collection-modal-backdrop");
+    const collectionModalClose = $("#collection-modal-close");
+    const collectionModalCancel = $("#collection-modal-cancel");
+    const collectionModalConfirm = $("#collection-modal-confirm");
+    const collectionNameInput = $("#collection-name-input");
+    const collectionDescriptionInput = $("#collection-description-input");
+    const collectionModalFeedback = $("#collection-modal-feedback");
+
+    const recordingCollectionsBackdrop = $("#recording-collections-modal-backdrop");
+    const recordingCollectionsClose = $("#recording-collections-modal-close");
+    const recordingCollectionsCancel = $("#recording-collections-cancel");
+    const recordingCollectionsSave = $("#recording-collections-save");
+    const recordingCollectionsName = $("#recording-collections-name");
+    const recordingCollectionsList = $("#recording-collections-list");
+    const recordingCollectionsEmpty = $("#recording-collections-empty");
+    const recordingCollectionsFeedback = $("#recording-collections-feedback");
+    let _collectionsRecordingName = null;
+
+    function openCollectionModal() {
+        if (collectionNameInput) collectionNameInput.value = "";
+        if (collectionDescriptionInput) collectionDescriptionInput.value = "";
+        hide(collectionModalFeedback);
+        show(collectionModalBackdrop);
+        collectionNameInput?.focus();
+    }
+
+    function closeCollectionModal() {
+        hide(collectionModalBackdrop);
+    }
+
+    async function createCollectionFromModal() {
+        const name = (collectionNameInput?.value || "").trim();
+        const description = (collectionDescriptionInput?.value || "").trim();
+        if (!name) {
+            collectionModalFeedback.className = "small mt-2 text-danger";
+            collectionModalFeedback.textContent = "Collection name is required";
+            show(collectionModalFeedback);
+            return null;
+        }
+
+        collectionModalConfirm.disabled = true;
+        collectionModalConfirm.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        try {
+            const res = await fetch(COLLECTIONS_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, description }),
+            });
+            const data = await res.json();
+            if (!data.ok) {
+                collectionModalFeedback.className = "small mt-2 text-danger";
+                collectionModalFeedback.textContent = data.error || "Failed to create collection";
+                show(collectionModalFeedback);
+                return null;
+            }
+            await loadDashboard();
+            closeCollectionModal();
+            return data.collection;
+        } catch (err) {
+            collectionModalFeedback.className = "small mt-2 text-danger";
+            collectionModalFeedback.textContent = `Failed: ${err.message}`;
+            show(collectionModalFeedback);
+            return null;
+        } finally {
+            collectionModalConfirm.disabled = false;
+            collectionModalConfirm.innerHTML = '<i class="bi bi-check-lg me-1"></i>Create';
+        }
+    }
+
+    function renderRecordingCollectionsList(rec) {
+        const selected = new Set((rec?.collection_ids || []).map(Number));
+        if (!_allCollections || _allCollections.length === 0) {
+            if (recordingCollectionsList) recordingCollectionsList.innerHTML = "";
+            show(recordingCollectionsEmpty);
+            return;
+        }
+        hide(recordingCollectionsEmpty);
+        recordingCollectionsList.innerHTML = _allCollections.map(collection => {
+            const id = Number(collection.id);
+            return `<div class="form-check mb-2">
+                <input class="form-check-input recording-collection-checkbox" type="checkbox" value="${id}"
+                       id="recording-collection-${id}" ${selected.has(id) ? "checked" : ""}>
+                <label class="form-check-label" for="recording-collection-${id}">
+                    ${escapeHtml(collection.name)}
+                    ${collection.description ? `<small class="text-muted d-block">${escapeHtml(collection.description)}</small>` : ""}
+                </label>
+            </div>`;
+        }).join("");
+    }
+
+    function openRecordingCollectionsModal(name) {
+        const rec = _allRecordings.find(r => r.name === name);
+        if (!rec) return;
+        _collectionsRecordingName = name;
+        if (recordingCollectionsName) recordingCollectionsName.textContent = name;
+        hide(recordingCollectionsFeedback);
+        renderRecordingCollectionsList(rec);
+        show(recordingCollectionsBackdrop);
+    }
+
+    function closeRecordingCollectionsModal() {
+        hide(recordingCollectionsBackdrop);
+        _collectionsRecordingName = null;
+    }
+
+    if (createCollectionBtn) createCollectionBtn.addEventListener("click", (e) => { e.preventDefault(); openCollectionModal(); });
+    if (collectionModalClose) collectionModalClose.addEventListener("click", closeCollectionModal);
+    if (collectionModalCancel) collectionModalCancel.addEventListener("click", closeCollectionModal);
+    if (collectionModalBackdrop) collectionModalBackdrop.addEventListener("click", (e) => { if (e.target === collectionModalBackdrop) closeCollectionModal(); });
+    if (collectionModalConfirm) collectionModalConfirm.addEventListener("click", createCollectionFromModal);
+    if (collectionNameInput) {
+        collectionNameInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                collectionModalConfirm?.click();
+            }
+        });
+    }
+
+    if (recordingCollectionsClose) recordingCollectionsClose.addEventListener("click", closeRecordingCollectionsModal);
+    if (recordingCollectionsCancel) recordingCollectionsCancel.addEventListener("click", closeRecordingCollectionsModal);
+    if (recordingCollectionsBackdrop) recordingCollectionsBackdrop.addEventListener("click", (e) => { if (e.target === recordingCollectionsBackdrop) closeRecordingCollectionsModal(); });
+    if (recordingCollectionsSave) {
+        recordingCollectionsSave.addEventListener("click", async () => {
+            if (!_collectionsRecordingName) return;
+            const collectionIds = Array.from(document.querySelectorAll(".recording-collection-checkbox:checked"))
+                .map(input => Number(input.value));
+
+            recordingCollectionsSave.disabled = true;
+            recordingCollectionsSave.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            hide(recordingCollectionsFeedback);
+            try {
+                const res = await fetch(`${RECORDING_COLLECTIONS_URL}/${encodeURIComponent(_collectionsRecordingName)}/collections`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ collection_ids: collectionIds }),
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    closeRecordingCollectionsModal();
+                    await loadDashboard();
+                } else {
+                    recordingCollectionsFeedback.className = "small mt-2 text-danger";
+                    recordingCollectionsFeedback.textContent = data.error || "Failed to update collections";
+                    show(recordingCollectionsFeedback);
+                }
+            } catch (err) {
+                recordingCollectionsFeedback.className = "small mt-2 text-danger";
+                recordingCollectionsFeedback.textContent = `Failed: ${err.message}`;
+                show(recordingCollectionsFeedback);
+            } finally {
+                recordingCollectionsSave.disabled = false;
+                recordingCollectionsSave.innerHTML = '<i class="bi bi-check-lg me-1"></i>Save';
+            }
+        });
+    }
+
+    document.addEventListener("click", (e) => {
+        const btn = e.target.closest(".btn-manage-collections");
+        if (!btn) return;
+        e.preventDefault();
+        openRecordingCollectionsModal(btn.dataset.name);
+    });
 
     // ─── Rename / Delete folder buttons ──────────────────────────
     document.addEventListener("click", async (e) => {
@@ -1801,15 +2048,6 @@ document.addEventListener("DOMContentLoaded", () => {
             transcriptSaveFeedback.textContent = "Speaker names reset";
             show(transcriptSaveFeedback);
         });
-    }
-
-    function escapeHtml(text) {
-        return (text || "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#39;");
     }
 
     function formatTranscript(text) {

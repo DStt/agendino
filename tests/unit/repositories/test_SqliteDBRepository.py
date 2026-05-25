@@ -175,3 +175,77 @@ class TestSqliteDBRepository:
         db2 = SqliteDBRepository("migrate_test.db", str(tmp_path), init_path)
         recordings = db2.get_recordings()
         assert len(recordings) == 1
+
+    def test_create_collection(self, db):
+        collection = db.create_collection("AI Strategy", "Strategic AI conversations")
+
+        assert collection["id"] is not None
+        assert collection["name"] == "AI Strategy"
+        assert collection["description"] == "Strategic AI conversations"
+        assert collection["count"] == 0
+
+    def test_create_collection_reuses_existing_name_case_insensitive(self, db):
+        first = db.create_collection("Features")
+        second = db.create_collection("features")
+
+        assert second["id"] == first["id"]
+        assert second["created"] is False
+
+    def test_add_and_remove_recording_collection(self, db, sample_recording):
+        db.insert_recording(sample_recording)
+        collection = db.create_collection("Catch-Up")
+
+        added = db.add_recording_to_collection(sample_recording.name, collection["id"])
+        assert added is True
+
+        collections = db.get_recording_collections(sample_recording.name)
+        assert [c["name"] for c in collections] == ["Catch-Up"]
+
+        counts = db.get_collections_with_counts()
+        assert counts[0]["count"] == 1
+
+        removed = db.remove_recording_from_collection(sample_recording.name, collection["id"])
+        assert removed is True
+        assert db.get_recording_collections(sample_recording.name) == []
+
+    def test_many_to_many_collection_membership(self, db):
+        rec_a = DBRecording(id=None, name="rec-a", label="Rec A", duration=10, created_at=datetime.now())
+        rec_b = DBRecording(id=None, name="rec-b", label="Rec B", duration=20, created_at=datetime.now())
+        db.insert_recording(rec_a)
+        db.insert_recording(rec_b)
+        strategy = db.create_collection("AI Strategy")
+        podcast = db.create_collection("Podcast Ideas")
+
+        db.add_recording_to_collection("rec-a", strategy["id"])
+        db.add_recording_to_collection("rec-a", podcast["id"])
+        db.add_recording_to_collection("rec-b", strategy["id"])
+
+        rec_a_collections = db.get_recording_collections("rec-a")
+        assert {c["name"] for c in rec_a_collections} == {"AI Strategy", "Podcast Ideas"}
+
+        counts = {c["name"]: c["count"] for c in db.get_collections_with_counts()}
+        assert counts["AI Strategy"] == 2
+        assert counts["Podcast Ideas"] == 1
+
+    def test_set_recording_collections_replaces_membership(self, db, sample_recording):
+        db.insert_recording(sample_recording)
+        first = db.create_collection("Leadership")
+        second = db.create_collection("Audience Strategy")
+
+        updated = db.set_recording_collections(sample_recording.name, [first["id"], second["id"]])
+        assert updated is True
+        assert {c["name"] for c in db.get_recording_collections(sample_recording.name)} == {
+            "Leadership",
+            "Audience Strategy",
+        }
+
+        db.set_recording_collections(sample_recording.name, [second["id"]])
+        assert [c["name"] for c in db.get_recording_collections(sample_recording.name)] == ["Audience Strategy"]
+
+    def test_recording_collections_map(self, db, sample_recording):
+        db.insert_recording(sample_recording)
+        collection = db.create_collection("Editorial Workflows")
+        db.add_recording_to_collection(sample_recording.name, collection["id"])
+
+        mapping = db.get_recording_collections_map()
+        assert mapping[sample_recording.name][0]["name"] == "Editorial Workflows"
