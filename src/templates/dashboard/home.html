@@ -120,6 +120,22 @@
                                         </div>
                                         <!-- Recordings table -->
                                         <div class="col table-responsive">
+                                            <div class="recording-filters d-flex flex-wrap gap-2 align-items-center p-3 border-bottom">
+                                                <div class="input-group input-group-sm" style="max-width: 320px;">
+                                                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                                    <input type="search" class="form-control" id="recording-search-input"
+                                                           placeholder="Search title or tags">
+                                                </div>
+                                                <div class="input-group input-group-sm" style="max-width: 210px;">
+                                                    <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
+                                                    <input type="date" class="form-control" id="recording-date-filter">
+                                                </div>
+                                                <button class="btn btn-sm btn-outline-secondary" id="recording-filter-clear"
+                                                        type="button" title="Clear filters">
+                                                    <i class="bi bi-x-lg"></i>
+                                                </button>
+                                                <span id="recording-filter-count" class="small text-muted ms-auto"></span>
+                                            </div>
                                             <div id="loading" class="text-center p-4">
                                                 <div class="spinner-border text-primary" role="status">
                                                     <span class="visually-hidden">Loading…</span>
@@ -407,26 +423,45 @@
     <div id="bulk-import-modal-backdrop" class="transcript-modal-backdrop d-none">
         <div class="transcript-modal" style="max-width: 760px;">
             <div class="transcript-modal-header" style="background: var(--bs-success);">
-                <h5 class="mb-0"><i class="bi bi-folder-plus me-2"></i>Bulk Import Library</h5>
+                <h5 class="mb-0"><i class="bi bi-folder-plus me-2"></i>Import Recordings</h5>
                 <button type="button" class="btn-close btn-close-white" id="bulk-import-modal-close"></button>
             </div>
             <div class="transcript-modal-body">
                 <div id="bulk-import-form-section">
-                    <div class="mb-3">
-                        <label for="bulk-import-folder-input" class="form-label">Local folder path</label>
-                        <input type="text" class="form-control" id="bulk-import-folder-input"
-                               placeholder="/Users/you/Recordings/HiNotes">
+                    <div class="btn-group w-100 mb-3" role="group" aria-label="Import mode">
+                        <input type="radio" class="btn-check" name="bulk-import-mode" id="bulk-import-mode-upload"
+                               value="upload" autocomplete="off" checked>
+                        <label class="btn btn-outline-success" for="bulk-import-mode-upload">
+                            <i class="bi bi-files me-1"></i>Manual Upload
+                        </label>
+                        <input type="radio" class="btn-check" name="bulk-import-mode" id="bulk-import-mode-folder"
+                               value="folder" autocomplete="off">
+                        <label class="btn btn-outline-success" for="bulk-import-mode-folder">
+                            <i class="bi bi-folder2-open me-1"></i>Folder Import
+                        </label>
                     </div>
-                    <div class="d-flex flex-wrap gap-3 mb-3">
-                        <div class="form-check">
+
+                    <div id="bulk-import-upload-panel">
+                        <div class="mb-3">
+                            <label for="bulk-import-files-input" class="form-label">Audio and transcript files</label>
+                            <input type="file" class="form-control" id="bulk-import-files-input"
+                                   accept=".mp3,.txt" multiple>
+                            <div class="form-text">Select one .mp3 and one .txt per recording.</div>
+                        </div>
+                    </div>
+
+                    <div id="bulk-import-folder-panel" class="d-none">
+                        <div class="mb-3">
+                            <label for="bulk-import-folder-input" class="form-label">Local folder path</label>
+                            <input type="text" class="form-control" id="bulk-import-folder-input"
+                                   placeholder="/Users/you/Recordings/HiNotes">
+                        </div>
+                        <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" id="bulk-import-recursive">
                             <label class="form-check-label" for="bulk-import-recursive">Include subfolders</label>
                         </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="bulk-import-transcribe">
-                            <label class="form-check-label" for="bulk-import-transcribe">Transcribe audio now</label>
-                        </div>
                     </div>
+
                     <div class="text-end">
                         <button class="btn btn-outline-secondary me-2" id="bulk-import-cancel-btn">Cancel</button>
                         <button class="btn btn-success" id="bulk-import-preview-btn">
