@@ -27,7 +27,7 @@ config = {}
 
 
 def is_auth_enabled() -> bool:
-    return os.getenv("AUTH_ENABLED", "false").lower() in ("true", "1", "yes")
+    return os.getenv("AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
 
 
 def get_config():
