@@ -40,11 +40,12 @@ class WhisperTranscriptionService:
         logger.info("Transcribing '%s' with local Whisper (%s)…", path.name, self._model_size)
 
         model = self._get_model()
-        segments, info = model.transcribe(
-            str(path),
-            beam_size=5,
-            vad_filter=True,
-        )
+        transcribe_kwargs = {"beam_size": 5, "vad_filter": True}
+        # Distilled checkpoints (distil-*) are prone to repetition with the default
+        # conditioning; faster-whisper recommends disabling it for them.
+        if self._model_size.startswith("distil"):
+            transcribe_kwargs["condition_on_previous_text"] = False
+        segments, info = model.transcribe(str(path), **transcribe_kwargs)
 
         logger.info(
             "Detected language: %s (probability %.2f)",

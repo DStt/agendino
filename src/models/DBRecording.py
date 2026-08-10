@@ -13,6 +13,7 @@ class DBRecording:
         file_extension: str = "hda",
         recorded_at: str | None = None,
         folder: str = "/",
+        transcription_status: str = "idle",
         summary: str | None = None,
         title: str | None = None,
         tags: str | None = None,
@@ -27,6 +28,7 @@ class DBRecording:
         self.file_extension = file_extension
         self.recorded_at = recorded_at
         self.folder = folder
+        self.transcription_status = transcription_status
         # Compatibility fields: populated from latest summary when available.
         self.summary = summary
         self.title = title
@@ -46,6 +48,7 @@ class DBRecording:
             file_extension=data["file_extension"] if "file_extension" in keys else "hda",
             recorded_at=data["recorded_at"] if "recorded_at" in keys else None,
             folder=data["folder"] if "folder" in keys else "/",
+            transcription_status=data["transcription_status"] if "transcription_status" in keys else "idle",
             summary=data["summary"] if "summary" in keys else None,
             title=data["title"] if "title" in keys else None,
             tags=data["tags"] if "tags" in keys else None,

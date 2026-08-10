@@ -10,8 +10,10 @@ from repositories.LocalRecordingsRepository import LocalRecordingsRepository
 from repositories.SqliteDBRepository import SqliteDBRepository
 from repositories.SystemPromptsRepository import SystemPromptsRepository
 from repositories.VectorStoreRepository import VectorStoreRepository
+from repositories.embedders import GeminiEmbedder, LocalEmbedder, OllamaEmbedder
+from services.ClaudeSummarizationService import ClaudeSummarizationService
 from services.NotionService import NotionService
-from services.RAGService import RAGService
+from services.RAGService import OllamaRAGService, RAGService
 from services.SummarizationService import SummarizationService
 from services.TaskGenerationService import TaskGenerationService
 from services.TranscriptionService import TranscriptionService
@@ -63,20 +65,37 @@ def get_local_recordings_repository() -> LocalRecordingsRepository:
 
 def get_transcription_service() -> TranscriptionService:
     _config = get_config()
-    return TranscriptionService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
+    # Optional per-task override; falls back to the shared GEMINI_MODEL.
+    model = _config.get("GEMINI_TRANSCRIPTION_MODEL") or _config["GEMINI_MODEL"]
+    return TranscriptionService(api_key=_config["GEMINI_API_KEY"], model=model)
 
 
 def get_whisper_transcription_service() -> WhisperTranscriptionService:
     _config = get_config()
     return WhisperTranscriptionService(
-        model_size=_config["WHISPER_MODEL_SIZE"],
-        device=_config["WHISPER_DEVICE"],
-        compute_type=_config["WHISPER_COMPUTE_TYPE"],
+        model_size=_config.get("WHISPER_MODEL_SIZE", "small"),
+        device=_config.get("WHISPER_DEVICE", "auto"),
+        compute_type=_config.get("WHISPER_COMPUTE_TYPE", "auto"),
     )
 
 
-def get_summarization_service() -> SummarizationService:
+def get_summarization_service():
+    """Return the configured summarization service (Gemini by default, or Claude).
+
+    Transcription is unaffected — Claude has no audio input, so it is summarization-only.
+    """
     _config = get_config()
+    provider = _config.get("SUMMARIZATION_PROVIDER", "gemini").lower()
+    if provider == "claude":
+        api_key = _config.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "SUMMARIZATION_PROVIDER=claude requires ANTHROPIC_API_KEY to be set"
+            )
+        return ClaudeSummarizationService(
+            api_key=api_key,
+            model=_config.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
+        )
     return SummarizationService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
 
 
@@ -122,6 +141,7 @@ def get_dashboard_controller() -> DashboardController:
         template_path=get_template_path(),
         publish_services=_build_publish_services(),
         whisper_transcription_service=get_whisper_transcription_service(),
+        vector_store_repository=get_vector_store_repository(),
         auth_enabled=is_auth_enabled(),
     )
 
@@ -145,17 +165,53 @@ def get_proactor_controller() -> ProactorController:
     )
 
 
+# Cache the embedder (a local model must not reload per request); do NOT cache the vector store —
+# a cached collection handle goes stale across the mismatch reset's delete/recreate.
+_embedder = None
+
+
+def get_embedder():
+    """Return the configured embedder (Gemini cloud by default, or a local sentence-transformers model)."""
+    global _embedder
+    if _embedder is None:
+        _config = get_config()
+        provider = _config.get("EMBEDDING_PROVIDER", "gemini").lower()
+        if provider == "ollama":
+            _embedder = OllamaEmbedder(
+                base_url=_config.get("OLLAMA_BASE_URL", "http://localhost:11434"),
+                model=_config.get("OLLAMA_EMBEDDING_MODEL", "bge-m3"),
+            )
+        elif provider == "local":
+            _embedder = LocalEmbedder(
+                model_name=_config.get("LOCAL_EMBEDDING_MODEL", "BAAI/bge-m3"),
+                device=_config.get("LOCAL_EMBEDDING_DEVICE", "auto"),
+            )
+        else:
+            _embedder = GeminiEmbedder(
+                api_key=_config["GEMINI_API_KEY"],
+                model=_config["GEMINI_EMBEDDING_MODEL"],
+            )
+    return _embedder
+
+
 def get_vector_store_repository() -> VectorStoreRepository:
-    _config = get_config()
     return VectorStoreRepository(
         persist_path=os.path.join(get_root_path(), "settings/vector_store"),
-        api_key=_config["GEMINI_API_KEY"],
-        model=_config["GEMINI_EMBEDDING_MODEL"],
+        embedder=get_embedder(),
     )
 
 
-def get_rag_service() -> RAGService:
+def get_rag_service():
+    """RAG generation service. `ollama`/`local` are synonyms (Ollama); unset follows EMBEDDING_PROVIDER."""
     _config = get_config()
+    embedding_provider = _config.get("EMBEDDING_PROVIDER", "gemini").lower()
+    default_provider = "ollama" if embedding_provider == "ollama" else "gemini"
+    provider = (_config.get("RAG_PROVIDER") or default_provider).lower()
+    if provider in ("ollama", "local"):
+        return OllamaRAGService(
+            base_url=_config.get("OLLAMA_BASE_URL", "http://localhost:11434"),
+            model=_config.get("OLLAMA_MODEL", "qwen2.5:7b"),
+        )
     return RAGService(api_key=_config["GEMINI_API_KEY"], model=_config["GEMINI_MODEL"])
 
 

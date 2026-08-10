@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
 
@@ -9,12 +10,15 @@ from fastapi.templating import Jinja2Templates
 from models.DBRecording import DBRecording
 from models.DBTask import DBTask
 from repositories.LocalRecordingsRepository import LocalRecordingsRepository, ALLOWED_AUDIO_EXTENSIONS
-from repositories.SqliteDBRepository import SqliteDBRepository
+from repositories.SqliteDBRepository import SqliteDBRepository, DuplicateRecordingError
 from repositories.SystemPromptsRepository import SystemPromptsRepository
+from repositories.VectorStoreRepository import VectorStoreRepository, build_summary_document
 from services.SummarizationService import SummarizationService
 from services.TaskGenerationService import TaskGenerationService
 from services.TranscriptionService import TranscriptionService
 from services.WhisperTranscriptionService import WhisperTranscriptionService
+
+logger = logging.getLogger(__name__)
 
 MIME_TYPES = {
     "hda": "audio/mpeg",
@@ -41,6 +45,7 @@ class DashboardController:
         template_path: str,
         publish_services: dict[str, object] | None = None,
         whisper_transcription_service: WhisperTranscriptionService | None = None,
+        vector_store_repository: VectorStoreRepository | None = None,
         auth_enabled: bool = False,
     ):
         self._sqlite_db_repository = sqlite_db_repository
@@ -52,6 +57,7 @@ class DashboardController:
         self._templates = Jinja2Templates(directory=template_path)
         self._publish_services: dict[str, object] = publish_services or {}
         self._whisper_transcription_service = whisper_transcription_service
+        self._vector_store_repository = vector_store_repository
         self._auth_enabled = auth_enabled
 
     @staticmethod
@@ -75,10 +81,20 @@ class DashboardController:
         return None
 
     def home(self, request: Request):
+        # Mirror the uvicorn worker count to the frontend so parallel uploads match
+        # the number of requests the server can actually process at once.
+        try:
+            upload_concurrency = max(1, int(os.getenv("WEB_CONCURRENCY", "1")))
+        except ValueError:
+            upload_concurrency = 1
         return self._templates.TemplateResponse(
             request=request,
             name="dashboard/home.html",
-            context={"active_page": "dashboard", "auth_enabled": self._auth_enabled},
+            context={
+                "active_page": "dashboard",
+                "auth_enabled": self._auth_enabled,
+                "upload_concurrency": upload_concurrency,
+            },
         )
 
     def list_local_recordings(self):
@@ -88,6 +104,7 @@ class DashboardController:
         local_files = self._local_recordings_repository.get_all()
         db_recordings = self._sqlite_db_repository.get_recordings()
         latest_summaries = self._sqlite_db_repository.get_latest_summaries_map()
+        summary_counts = self._sqlite_db_repository.get_summary_counts_map()
 
         # Map bare name → local filename (preserving actual extension)
         local_map: dict[str, str] = {}
@@ -167,9 +184,10 @@ class DashboardController:
                         db_rec.transcript is not None and len(db_rec.transcript) > 0 if db_rec else False
                     ),
                     "has_summary": latest_summary is not None,
-                    "summary_count": len(self._sqlite_db_repository.get_summaries(bare_name)) if db_rec else 0,
+                    "summary_count": summary_counts.get(bare_name, 0) if db_rec else 0,
                     "notion_url": latest_summary.notion_url if latest_summary else None,
                     "folder": db_rec.folder if db_rec else "/",
+                    "transcription_status": db_rec.transcription_status if db_rec else "idle",
                 }
             )
 
@@ -223,7 +241,12 @@ class DashboardController:
             file_extension=file_ext,
             created_at=datetime.now(),
         )
-        new_id = self._sqlite_db_repository.insert_recording(db_rec)
+        try:
+            new_id = self._sqlite_db_repository.insert_recording(db_rec)
+        except DuplicateRecordingError:
+            # Lost a concurrent-upload race after passing the pre-check above. The file
+            # on disk is identical (same name + bytes), so no cleanup is needed.
+            return {"ok": False, "error": f"A recording named '{bare_name}' already exists in the database"}
 
         return {
             "ok": True,
@@ -319,6 +342,21 @@ class DashboardController:
                 return candidate, ext_dot.lstrip(".")
         return f"{bare_name}.hda", "hda"
 
+    def bare_name(self, name: str) -> str:
+        """Public accessor for the normalized (extension-stripped) recording name."""
+        return self._bare_name(name)
+
+    def get_cached_transcript(self, name: str) -> str | None:
+        """Return an already-saved transcript without triggering transcription, else None."""
+        db_rec = self._sqlite_db_repository.get_recording_by_name(self._bare_name(name))
+        if db_rec and db_rec.transcript:
+            return db_rec.transcript
+        return None
+
+    def set_transcription_status(self, name: str, status: str) -> None:
+        """Update the recording's transcription lifecycle status (idle/queued/running/done/failed)."""
+        self._sqlite_db_repository.set_transcription_status(self._bare_name(name), status)
+
     def transcribe_recording(self, name: str, engine: str = "gemini") -> dict:
         bare_name = self._bare_name(name)
         local_filename, file_ext = self._resolve_local_filename(bare_name)
@@ -371,6 +409,34 @@ class DashboardController:
             return {"ok": False, "error": f"Recording '{bare_name}' not found"}
         return {"ok": True, "name": bare_name, "transcript": transcript}
 
+    def delete_transcript(self, name: str, vector_store=None) -> dict:
+        """Delete a recording's transcript plus everything derived from it (summaries, tasks, and
+        their RAG embeddings), and reset its status so it can be re-transcribed. Keeps the recording."""
+        bare_name = self._bare_name(name)
+        db_rec = self._sqlite_db_repository.get_recording_by_name(bare_name)
+        if not db_rec or not db_rec.transcript:
+            return {"ok": False, "error": "No transcript to delete"}
+        if db_rec.transcription_status in ("queued", "running"):
+            return {"ok": False, "error": "Transcription in progress"}
+
+        # Remove derived summaries' embeddings from the vector store (best-effort).
+        summaries = self._sqlite_db_repository.get_summaries(bare_name)
+        if vector_store is not None:
+            for s in summaries:
+                try:
+                    vector_store.delete_summary(s.id)
+                except Exception as e:
+                    logger.warning("Failed to delete summary %s from vector store: %s", s.id, e)
+
+        deleted = self._sqlite_db_repository.delete_summaries_by_recording(bare_name)  # tasks cascade
+        self._sqlite_db_repository.clear_transcript(bare_name)
+        return {
+            "ok": True,
+            "name": bare_name,
+            "message": f"Deleted transcript for '{bare_name}'",
+            "deleted_summaries": deleted,
+        }
+
     def list_system_prompts(self) -> dict:
         prompts = self._system_prompts_repository.get_all()
         return {"ok": True, "prompts": prompts}
@@ -407,6 +473,7 @@ class DashboardController:
             tags_str,
             prompt_id=prompt_id,
         )
+        self._index_summary(saved)
         return {
             "ok": True,
             "summary_id": saved.id,
@@ -415,6 +482,16 @@ class DashboardController:
             "title": title,
             "tags": tags,
         }
+
+    def _index_summary(self, summary) -> None:
+        """Best-effort embed of a new summary so /ask + mind map see it without a manual reload."""
+        if self._vector_store_repository is None or not (summary.summary or "").strip():
+            return
+        try:
+            doc_text, metadata = build_summary_document(summary)
+            self._vector_store_repository.add_summary(summary.id, doc_text, metadata)
+        except Exception as e:
+            logger.warning("Auto-embed of summary %s failed (load summaries to backfill): %s", summary.id, e)
 
     def get_summaries(self, name: str) -> dict:
         bare_name = self._bare_name(name)

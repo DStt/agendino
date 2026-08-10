@@ -44,6 +44,8 @@ class TestIntegrationSqliteDBRepository:
             conn.close()
 
         db._initialize_db(init_path)
+        db._ensure_recording_columns()
+        db._ensure_recording_indexes()
 
     def test_it_can_add_a_file(self, db, init_path):
         db_file = DBRecording(

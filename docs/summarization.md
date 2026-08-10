@@ -1,6 +1,6 @@
 # Summarization
 
-Generate structured AI summaries from transcripts using Google Gemini with customizable system prompts.
+Generate structured AI summaries from transcripts using Google Gemini or Anthropic Claude, with customizable system prompts.
 
 ![Summarization](screenshots/summarization.png)
 
@@ -34,6 +34,46 @@ After generation, you can inline-edit:
 - **Content** - edit the full markdown body.
 
 All changes are saved to the database.
+
+## Choosing a Provider
+
+Summarization can run on either Google Gemini (default) or Anthropic Claude. The
+provider is selected app-wide via environment variables in `.env`:
+
+| Variable | Default | Options |
+|----------|---------|---------|
+| `SUMMARIZATION_PROVIDER` | `gemini` | `gemini`, `claude` |
+| `ANTHROPIC_API_KEY` | — | Required when provider is `claude` |
+| `CLAUDE_MODEL` | `claude-sonnet-4-6` | `claude-sonnet-4-6`, `claude-opus-4-8`, `claude-haiku-4-5` |
+
+Restart the app after changing these. Both providers return the same structured
+title / tags / summary, so existing system prompts work unchanged either way.
+
+> **Note:** Claude is only available for summarization. Its API cannot accept audio,
+> so **transcription** always uses Gemini or Whisper regardless of this setting.
+
+### Claude Models
+
+When `SUMMARIZATION_PROVIDER=claude`, the model is chosen with `CLAUDE_MODEL`:
+
+| `CLAUDE_MODEL` | Best for | Relative cost |
+|----------------|----------|---------------|
+| `claude-sonnet-4-6` *(default)* | Balanced speed, quality, and cost — recommended for most summarization. | $ |
+| `claude-opus-4-8` | Highest quality on long or complex transcripts where accuracy matters most. | $$$ |
+| `claude-haiku-4-5` | Fastest and cheapest, for short recordings or high volume. | ¢ |
+
+To set the model, add the variable to your `.env` file and restart the app. For
+example, to use the most capable model:
+
+```dotenv
+SUMMARIZATION_PROVIDER=claude
+ANTHROPIC_API_KEY=sk-ant-...
+CLAUDE_MODEL=claude-opus-4-8
+```
+
+If `CLAUDE_MODEL` is omitted, it defaults to `claude-sonnet-4-6`. Use the exact model
+ID strings above (no date suffixes). You can point `CLAUDE_MODEL` at any current
+Claude model ID your API key has access to.
 
 ## System Prompts
 

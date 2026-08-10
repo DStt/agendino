@@ -1,0 +1,4 @@
+# Place your TLS certificate and key here (referenced by dynamic/tls.yml):
+#   local.crt
+#   local.key
+# This file keeps the otherwise-empty directory tracked in git.

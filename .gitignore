@@ -2,8 +2,16 @@
 .env
 .idea
 *.db
+__pycache__/
+*.pyc
 /htmlcov/
 /settings/vector_store/
+/settings/hf_cache/
+/settings/ollama_models/
 /settings/sessions.json
 /settings/auth.json
 /settings/banned_ips.json
+
+# Never commit TLS material; generate per host
+certs/*
+!certs/.gitkeep

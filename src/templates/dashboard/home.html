@@ -4,6 +4,12 @@
 
 {% block navbar_items %}
 <li class="nav-item">
+    <a class="nav-link position-relative" href="#" id="notif-bell" role="button" title="Notifications">
+        <i class="bi bi-bell"></i>
+        <span id="notif-badge" class="badge rounded-pill bg-danger notif-badge d-none">0</span>
+    </a>
+</li>
+<li class="nav-item">
     <a class="nav-link" href="#" id="btn-upload" role="button" title="Upload recording">
         <i class="bi bi-upload"></i> Upload
     </a>
@@ -158,6 +164,18 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Notification history (toggled by the navbar bell) -->
+                    <div id="notif-panel" class="notif-panel d-none">
+                        <div class="notif-panel-header">
+                            <span class="fw-semibold"><i class="bi bi-bell me-1"></i>Notifications</span>
+                            <div class="d-flex gap-2 align-items-center">
+                                <button id="notif-clear" type="button" class="btn btn-sm btn-link text-decoration-none p-0" title="Clear all">Clear all</button>
+                                <button id="notif-panel-close" type="button" class="btn-close" aria-label="Close"></button>
+                            </div>
+                        </div>
+                        <div id="notif-list" class="notif-list"></div>
+                    </div>
 {% endblock %}
 
 {% block modals %}
@@ -185,6 +203,9 @@
                     </button>
                     <button type="button" class="btn btn-sm btn-success d-none" id="transcript-save-btn">
                         <i class="bi bi-check-lg"></i> Save
+                    </button>
+                    <button type="button" class="btn btn-sm btn-danger d-none" id="transcript-delete-btn" title="Delete transcription (also removes its summaries, tasks, and search index entries)">
+                        <i class="bi bi-trash3"></i> Delete
                     </button>
                     <button type="button" class="btn-close btn-close-white" id="transcript-modal-close"></button>
                 </div>
@@ -374,9 +395,9 @@
                 <div id="upload-form-section">
                     <div class="mb-3">
                         <label for="upload-file-input" class="form-label">Audio file</label>
-                        <input class="form-control" type="file" id="upload-file-input"
+                        <input class="form-control" type="file" id="upload-file-input" multiple
                                accept=".hda,.mp3,.wav,.m4a,.ogg,.webm,.flac,.aac,.wma">
-                        <div class="form-text">Supported: HDA, MP3, WAV, M4A, OGG, WebM, FLAC, AAC, WMA</div>
+                        <div class="form-text">Supported: HDA, MP3, WAV, M4A, OGG, WebM, FLAC, AAC, WMA. Select multiple files to upload in parallel.</div>
                     </div>
                     <div class="mb-3">
                         <label for="upload-label-input" class="form-label">Label <small class="text-muted">(optional)</small></label>
@@ -453,5 +474,6 @@
 
 {% block extra_js %}
 <script src="/static/hidock-device.js?v=1"></script>
-    <script src="/static/dashboard.js?v=3"></script>
+    <script>window.UPLOAD_CONCURRENCY = {{ upload_concurrency | default(4) }};</script>
+    <script src="/static/dashboard.js?v=8"></script>
 {% endblock %}

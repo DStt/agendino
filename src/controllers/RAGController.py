@@ -1,16 +1,68 @@
 from __future__ import annotations
 
 import logging
+import math
+from collections import Counter
 from datetime import datetime
 
+import numpy as np
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
 from repositories.SqliteDBRepository import SqliteDBRepository
-from repositories.VectorStoreRepository import VectorStoreRepository
+from repositories.VectorStoreRepository import VectorStoreRepository, build_summary_document
 from services.RAGService import RAGService
 
 logger = logging.getLogger(__name__)
+
+# Below this many summaries, skip clustering and use the single-shot mind map (fits the context fine).
+MIN_CLUSTER_N = 12
+
+
+def _normalize(matrix: np.ndarray) -> np.ndarray:
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return matrix / norms
+
+
+def _kmeans(vectors: list[list[float]], k: int, seed: int = 0):
+    """Cosine k-means via scikit-learn (L2-normalized → Euclidean ≈ cosine). Returns (labels, centroids)."""
+    from sklearn.cluster import KMeans
+
+    x = _normalize(np.asarray(vectors, dtype=float))
+    k = max(1, min(k, len(x)))
+    km = KMeans(n_clusters=k, random_state=seed, n_init=10)
+    labels = km.fit_predict(x)
+    return labels, km.cluster_centers_
+
+
+def _central_topic(records: list[dict]) -> str:
+    """Heuristic central topic: the most common tag across the included summaries (no extra LLM call)."""
+    tags = Counter()
+    for r in records:
+        for tag in r.get("tags", []):
+            tag = tag.strip()
+            if tag:
+                tags[tag] += 1
+    return tags.most_common(1)[0][0] if tags else "Knowledge Base"
+
+
+def _connections(centroids: list, branches: list[dict], top: int = 3, threshold: float = 0.5) -> list[dict]:
+    """Top cross-branch links by centroid cosine similarity."""
+    if len(branches) < 2:
+        return []
+    cn = _normalize(np.asarray(centroids, dtype=float))
+    sims = cn @ cn.T
+    pairs = sorted(
+        ((sims[i][j], i, j) for i in range(len(branches)) for j in range(i + 1, len(branches))),
+        reverse=True,
+    )
+    conns = []
+    for sim, i, j in pairs[:top]:
+        if sim < threshold:
+            continue
+        conns.append({"from": branches[i]["id"], "to": branches[j]["id"], "label": "related"})
+    return conns
 
 
 class RAGController:
@@ -54,6 +106,9 @@ class RAGController:
             "ok": True,
             "total_summaries": total_summaries,
             "loaded_count": loaded_count,
+            # Hint the UI to (re)load: summaries exist but none are in the vector store — true for a
+            # fresh store and after an embedder-change reset wipes it.
+            "needs_reload": total_summaries > 0 and loaded_count == 0,
         }
 
     def list_summaries(self) -> dict:
@@ -91,22 +146,7 @@ class RAGController:
                 continue
 
             try:
-                # Build rich document text for better retrieval
-                doc_text = ""
-                if summary.title:
-                    doc_text += f"Title: {summary.title}\n"
-                if summary.tags:
-                    doc_text += f"Tags: {summary.tags}\n"
-                doc_text += f"\n{summary.summary}"
-
-                metadata = {
-                    "summary_id": summary.id,
-                    "recording_name": summary.recording_name,
-                    "title": summary.title or "",
-                    "tags": summary.tags or "",
-                    "version": summary.version,
-                }
-
+                doc_text, metadata = build_summary_document(summary)
                 self._vector_store.add_summary(summary.id, doc_text, metadata)
                 loaded += 1
             except Exception as e:
@@ -125,7 +165,10 @@ class RAGController:
         if self._vector_store.count() == 0:
             return {"ok": False, "error": "Vector store is empty. Load summaries first."}
 
-        results = self._vector_store.search(query, top_k, summary_ids=summary_ids)
+        try:
+            results = self._vector_store.search(query, top_k, summary_ids=summary_ids)
+        except Exception as e:
+            return {"ok": False, "error": f"Search failed: {str(e)}"}
         return {
             "ok": True,
             "results": results,
@@ -212,34 +255,83 @@ class RAGController:
         return node, edges
 
     def generate_mind_map(self, summary_ids: list[int] | None = None) -> dict:
-        """Use Gemini to generate an AI-structured mind map from summaries."""
-        summaries_map = self._sqlite_db_repository.get_latest_summaries_map()
-
-        summaries_list = []
-        for name, summary in summaries_map.items():
-            if summary_ids and summary.id not in summary_ids:
-                continue
-            if not summary.summary or not summary.summary.strip():
-                continue
-            summaries_list.append(
-                {
-                    "id": summary.id,
-                    "title": summary.title or name,
-                    "tags": summary.tags.split(",") if summary.tags else [],
-                    "summary": summary.summary,
-                    "recording_name": summary.recording_name,
-                }
-            )
-
-        if not summaries_list:
+        """AI mind map: cluster vector-store embeddings, label one branch per cluster (scales past the
+        context window). Needs summaries embedded (auto on summarize, or via "Load summaries")."""
+        records = self._collect_records(summary_ids)
+        if records is None:
+            return {"ok": False, "error": "Vector store is empty. Load summaries first."}
+        if not records:
             return {"ok": False, "error": "No summaries to analyze"}
 
         try:
-            result = self._rag_service.generate_mind_map(summaries_list)
+            # Small corpus: the single-shot prompt fits fine — skip clustering.
+            if len(records) < MIN_CLUSTER_N:
+                result = self._rag_service.generate_mind_map(records)
+                return {"ok": True, "mind_map": result, "summary_count": len(records)}
+            mind_map = self._clustered_mind_map(records)
         except Exception as e:
             return {"ok": False, "error": f"Mind map generation failed: {str(e)}"}
 
-        return {"ok": True, "mind_map": result, "summary_count": len(summaries_list)}
+        return {"ok": True, "mind_map": mind_map, "summary_count": len(records)}
+
+    def _collect_records(self, summary_ids: list[int] | None) -> list[dict] | None:
+        """Pull summaries (+ embeddings) from the vector store. None = empty store; [] = nothing matched."""
+        data = self._vector_store.get_all()
+        ids = data.get("ids") or []
+        if not ids:
+            return None
+        documents = data.get("documents") or []
+        metadatas = data.get("metadatas") or []
+        embeddings = data.get("embeddings")
+        embeddings = embeddings if embeddings is not None else []
+
+        records = []
+        for i in range(len(ids)):
+            meta = metadatas[i] or {}
+            sid = meta.get("summary_id")
+            if summary_ids and sid not in summary_ids:
+                continue
+            tags = meta.get("tags", "")
+            records.append(
+                {
+                    "id": sid,
+                    "title": meta.get("title", ""),
+                    "tags": tags.split(",") if tags else [],
+                    "summary": documents[i] if i < len(documents) else "",
+                    "embedding": embeddings[i] if i < len(embeddings) else None,
+                }
+            )
+        return records
+
+    def _clustered_mind_map(self, records: list[dict]) -> dict:
+        """Cluster embeddings → one labelled branch per cluster, with a heuristic topic + connections."""
+        k = max(3, min(12, round(math.sqrt(len(records) / 2))))
+        labels, centroids = _kmeans([r["embedding"] for r in records], k)
+
+        branches = []
+        branch_centroids = []
+        for j in range(len(centroids)):
+            members = [records[i] for i in range(len(records)) if labels[i] == j]
+            if not members:
+                continue
+            branch = self._rag_service.label_cluster(members)
+            bid = f"branch_{j + 1}"
+            children = [
+                {
+                    "id": f"leaf_{j + 1}_{ci + 1}",
+                    "label": child.get("label", ""),
+                    "summary_ids": child.get("summary_ids", []),
+                }
+                for ci, child in enumerate(branch.get("children", []))
+            ]
+            branches.append({"id": bid, "label": branch.get("label") or f"Theme {j + 1}", "children": children})
+            branch_centroids.append(centroids[j])
+
+        return {
+            "central_topic": _central_topic(records),
+            "branches": branches,
+            "connections": _connections(branch_centroids, branches),
+        }
 
     def clear_vector_store(self) -> dict:
         self._vector_store.clear()

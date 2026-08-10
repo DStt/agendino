@@ -1,0 +1,27 @@
+# GPU for Whisper (celery) and Ollama (embeddings + generation); agendino loads no model, so no GPU.
+# Enable with GPU=1 in .env (or -f compose.gpu.yaml). Needs NVIDIA + Container Toolkit. See docs/docker.md.
+# VRAM is additive across containers (no shared queue) → overflow OOMs. Whisper set to 'turbo' for
+# headroom on small cards; raise to large-v3 if you have the VRAM. See docs/docker.md.
+services:
+  celery:
+    environment:
+      # float16 needs compute capability >= 7.0 (e.g. RTX 20-series and newer).
+      # Older cards (e.g. GTX 750 Ti, CC 5.0) must use int8 / float32 — see docs/transcription.md.
+      - WHISPER_COMPUTE_TYPE=float16
+      - WHISPER_MODEL_SIZE=turbo
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

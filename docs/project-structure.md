@@ -61,6 +61,12 @@ agendino/
 ├── local_recordings/                      # Synced & uploaded audio files
 ├── system_prompts/                        # Summarization prompt templates
 ├── tests/                                 # Unit & integration tests
+├── compose.yaml                           # Docker stack: agendino (web), celery, redis, traefik
+├── compose.gpu.yaml                       # Optional GPU override for Whisper (enable via GPU=1)
+├── Dockerfile                             # App image (CUDA base; runs on CPU or GPU)
+├── Dockerfile.traefik                     # Traefik reverse-proxy image
+├── certs/                                 # TLS cert/key for Traefik (contents gitignored)
+├── .env.example                           # Documented config template (copy to .env)
 ├── requirements.txt
 ├── requirements-dev.txt
 └── pyproject.toml

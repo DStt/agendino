@@ -8,13 +8,13 @@ Retrieval-Augmented Generation (RAG) for searching and querying your meeting kno
 
 ## Overview
 
-The Knowledge page lets you load all your summaries into a local vector store (ChromaDB with Gemini embeddings), then search or ask natural-language questions across your entire meeting knowledge base. It also includes an interactive mind map for visualizing connections between summaries.
+The Knowledge page lets you search or ask natural-language questions across your entire meeting knowledge base, backed by a local vector store (ChromaDB). It also includes an interactive mind map for visualizing connections between summaries.
+
+Embeddings and answers can run on **Gemini** (cloud) or **offline** (Ollama, or in-process for non-Docker dev) — see [Docker → Local knowledge base](docker.md) for the `EMBEDDING_PROVIDER` / `RAG_PROVIDER` settings.
 
 ## Setup
 
-1. Navigate to the **Knowledge** page from the sidebar.
-2. Click **Load Summaries** to index all summaries into the ChromaDB vector store.
-3. This creates Gemini embeddings for each summary and stores them locally in `settings/vector_store/`.
+New summaries are **indexed automatically** when they're generated, so search and Ask stay current on their own. Use **Load Summaries** on the Knowledge page to backfill summaries created before indexing was enabled, or to rebuild after switching the embedding model. Embeddings are stored in `settings/vector_store/`.
 
 ## Semantic Search
 
@@ -30,7 +30,7 @@ Use **Ask** to pose natural-language questions:
 
 1. Type your question (e.g. "What decisions were made about the migration timeline?").
 2. Relevant summary chunks are retrieved from the vector store.
-3. Gemini answers based on the retrieved context.
+3. The configured model (Gemini, or a local Ollama model) answers based on the retrieved context.
 4. The response includes **source citations** with links back to the original summaries.
 
 ## Filtering
@@ -57,11 +57,12 @@ Visualize connections across summaries as an interactive graph.
 
 ### AI-Generated Mode
 
-- Gemini analyzes all summaries and produces a **hierarchical map**:
+- The configured model (Gemini or local Ollama) produces a **hierarchical map**:
   - Central topic
-  - 3–7 thematic branches
+  - Thematic branches (count scales with how many summaries you have)
   - Key insights as leaf nodes (with source summary IDs)
   - Cross-cutting connections between themes
+- For large knowledge bases, summaries are **clustered by embedding** and each cluster is labelled separately, so the map covers the whole base instead of only what fits in one prompt. Requires summaries to be loaded/indexed first.
 
 ---
 

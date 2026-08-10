@@ -18,7 +18,13 @@ const SUMMARY_UPDATE_URL = "/api/dashboard/summary";
 const DELETE_RECORDING_URL = "/api/dashboard/recording";
 const TASKS_GENERATE_URL = "/api/dashboard/tasks/generate";
 const TASKS_URL = "/api/dashboard/tasks";
+const TASK_STATUS_URL = "/api/dashboard/tasks/status";
+const TASKS_ACTIVE_URL = "/api/dashboard/tasks/active";
 const UPLOAD_URL = "/api/dashboard/upload";
+// Max uploads in flight at once. Injected by the server from WEB_CONCURRENCY (the
+// uvicorn worker count) so client concurrency matches what the server can process
+// in parallel; falls back to 4 if the page didn't provide it.
+const UPLOAD_CONCURRENCY = Math.max(1, Number(window.UPLOAD_CONCURRENCY) || 4);
 const RECORDING_UPDATE_URL = "/api/dashboard/recording";
 const FOLDERS_URL = "/api/dashboard/folders";
 const MOVE_RECORDING_URL = "/api/dashboard/recording";
@@ -26,6 +32,270 @@ const BULK_MOVE_URL = "/api/dashboard/recordings/move";
 
 const show = (el) => el?.classList.remove("d-none");
 const hide = (el) => el?.classList.add("d-none");
+
+// Run `worker(item, index)` over `items` with at most `concurrency` in flight.
+// Never rejects: each result is { status: "fulfilled", value } or
+// { status: "rejected", reason }, indexed to match `items`.
+async function runPool(items, concurrency, worker) {
+    const results = new Array(items.length);
+    let next = 0;
+    async function runner() {
+        while (next < items.length) {
+            const i = next++;
+            try {
+                results[i] = { status: "fulfilled", value: await worker(items[i], i) };
+            } catch (reason) {
+                results[i] = { status: "rejected", reason };
+            }
+        }
+    }
+    const runners = [];
+    for (let k = 0; k < Math.min(concurrency, items.length); k++) runners.push(runner());
+    await Promise.all(runners);
+    return results;
+}
+
+// ─── Notification center (toasts + hideable history) ────────────────────────
+// Errors used to vanish the moment a modal/popup was dismissed. notify() routes
+// every message to a transient toast AND a persistent, hideable history panel,
+// so nothing is lost. History is kept in localStorage so it survives refreshes.
+const NOTIF_STORE_KEY = "agendino.notifications";
+const NOTIF_OPEN_KEY = "agendino.notifPanelOpen";
+const NOTIF_MAX = 50;
+let _notifications = [];   // newest first: {id, level, title, msg, ts, read}
+let _notifSeq = 0;
+
+const _NOTIF_META = {
+    error:   { cls: "danger",  icon: "bi-exclamation-triangle-fill" },
+    warning: { cls: "warning", icon: "bi-exclamation-circle-fill" },
+    success: { cls: "success", icon: "bi-check-circle-fill" },
+    info:    { cls: "info",    icon: "bi-info-circle-fill" },
+};
+
+function _notifLoad() {
+    try {
+        _notifications = JSON.parse(localStorage.getItem(NOTIF_STORE_KEY)) || [];
+    } catch { _notifications = []; }
+    _notifSeq = _notifications.reduce((m, n) => Math.max(m, n.id || 0), 0);
+}
+
+function _notifSave() {
+    try { localStorage.setItem(NOTIF_STORE_KEY, JSON.stringify(_notifications)); } catch { /* quota */ }
+}
+
+function _notifEscape(text) {
+    return String(text == null ? "" : text)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function _notifRelTime(ts) {
+    const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    if (s < 60) return "just now";
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+}
+
+// Public entry point. level: error | warning | success | info.
+function notify(msg, { level = "error", title = null, toast = true } = {}) {
+    const entry = {
+        id: ++_notifSeq,
+        level: _NOTIF_META[level] ? level : "info",
+        title: title || null,
+        msg: String(msg == null ? "" : msg),
+        ts: Date.now(),
+        read: false,
+    };
+    _notifications.unshift(entry);
+    if (_notifications.length > NOTIF_MAX) _notifications.length = NOTIF_MAX;
+    _notifSave();
+    _notifRenderBadge();
+    _notifRenderPanel();
+    if (toast) _notifShowToast(entry);
+    return entry.id;
+}
+
+// ── Toasts (transient) ──────────────────────────────────────────
+function _notifToastContainer() {
+    let c = document.getElementById("notif-toast-container");
+    if (!c) {
+        c = document.createElement("div");
+        c.id = "notif-toast-container";
+        c.className = "toast-container position-fixed top-0 end-0 p-3";
+        document.body.appendChild(c);
+    }
+    return c;
+}
+
+function _notifShowToast(entry) {
+    const meta = _NOTIF_META[entry.level];
+    const el = document.createElement("div");
+    el.className = `toast toast-${meta.cls} show notif-toast`;
+    el.setAttribute("role", "alert");
+    el.innerHTML = `
+        <div class="toast-body d-flex align-items-start gap-2">
+            <i class="bi ${meta.icon} mt-1"></i>
+            <div class="flex-grow-1">
+                ${entry.title ? `<div class="fw-semibold">${_notifEscape(entry.title)}</div>` : ""}
+                <div>${_notifEscape(entry.msg)}</div>
+            </div>
+            <button type="button" class="btn-close ms-1" aria-label="Close"></button>
+        </div>`;
+    const remove = () => { el.classList.remove("show"); setTimeout(() => el.remove(), 200); };
+    el.querySelector(".btn-close").addEventListener("click", (e) => { e.stopPropagation(); remove(); });
+    // Clicking the toast body opens the full history panel.
+    el.addEventListener("click", (e) => { e.stopPropagation(); remove(); _notifOpenPanel(); });
+    _notifToastContainer().appendChild(el);
+    // Errors/warnings linger; success/info auto-dismiss quickly.
+    const ttl = (entry.level === "error" || entry.level === "warning") ? 10000 : 4000;
+    setTimeout(remove, ttl);
+}
+
+// ── History panel (persistent, hideable) ────────────────────────
+function _notifUnread() { return _notifications.filter(n => !n.read).length; }
+
+function _notifRenderBadge() {
+    const badge = document.getElementById("notif-badge");
+    if (!badge) return;
+    const n = _notifUnread();
+    badge.textContent = n > 99 ? "99+" : String(n);
+    badge.classList.toggle("d-none", n === 0);
+}
+
+function _notifRenderPanel() {
+    const list = document.getElementById("notif-list");
+    if (!list) return;
+    if (_notifications.length === 0) {
+        list.innerHTML = `<div class="notif-empty text-muted text-center p-4">
+            <i class="bi bi-bell-slash d-block mb-2" style="font-size:1.5rem"></i>No notifications</div>`;
+        return;
+    }
+    list.innerHTML = _notifications.map(n => {
+        const meta = _NOTIF_META[n.level];
+        return `<div class="notif-item ${n.read ? "" : "notif-unread"}" data-id="${n.id}">
+            <i class="bi ${meta.icon} notif-icon text-${meta.cls}"></i>
+            <div class="notif-text">
+                ${n.title ? `<div class="notif-title">${_notifEscape(n.title)}</div>` : ""}
+                <div class="notif-msg">${_notifEscape(n.msg)}</div>
+                <div class="notif-time">${_notifRelTime(n.ts)}</div>
+            </div>
+            <button class="btn-close notif-dismiss" data-id="${n.id}" aria-label="Dismiss"></button>
+        </div>`;
+    }).join("");
+}
+
+function _notifPanelEl() { return document.getElementById("notif-panel"); }
+
+function _notifOpenPanel() {
+    const p = _notifPanelEl();
+    if (!p) return;
+    p.classList.remove("d-none");
+    try { localStorage.setItem(NOTIF_OPEN_KEY, "1"); } catch { /* quota */ }
+    _notifications.forEach(n => { n.read = true; });   // opening clears unread
+    _notifSave();
+    _notifRenderBadge();
+    _notifRenderPanel();
+}
+
+function _notifClosePanel() {
+    _notifPanelEl()?.classList.add("d-none");
+    try { localStorage.setItem(NOTIF_OPEN_KEY, "0"); } catch { /* quota */ }
+}
+
+function _notifTogglePanel() {
+    const p = _notifPanelEl();
+    if (!p) return;
+    if (p.classList.contains("d-none")) _notifOpenPanel(); else _notifClosePanel();
+}
+
+function _notifDismiss(id) {
+    _notifications = _notifications.filter(n => n.id !== id);
+    _notifSave();
+    _notifRenderBadge();
+    _notifRenderPanel();
+}
+
+function _notifClearAll() {
+    _notifications = [];
+    _notifSave();
+    _notifRenderBadge();
+    _notifRenderPanel();
+}
+
+// Wire up the bell + panel once the DOM is ready.
+function initNotifications() {
+    _notifLoad();
+    _notifRenderBadge();
+    _notifRenderPanel();
+
+    document.getElementById("notif-bell")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        _notifTogglePanel();
+    });
+    document.getElementById("notif-panel-close")?.addEventListener("click", _notifClosePanel);
+    document.getElementById("notif-clear")?.addEventListener("click", _notifClearAll);
+    document.getElementById("notif-list")?.addEventListener("click", (e) => {
+        const d = e.target.closest(".notif-dismiss");
+        if (d) _notifDismiss(parseInt(d.dataset.id, 10));
+    });
+
+    // Restore a previously-open panel (passive restore: don't mark read).
+    try {
+        if (localStorage.getItem(NOTIF_OPEN_KEY) === "1") _notifPanelEl()?.classList.remove("d-none");
+    } catch { /* unavailable */ }
+
+    // Click outside the panel (and not on the bell) closes it.
+    document.addEventListener("click", (e) => {
+        const p = _notifPanelEl();
+        if (!p || p.classList.contains("d-none")) return;
+        if (p.contains(e.target) || e.target.closest("#notif-bell")) return;
+        _notifClosePanel();
+    });
+}
+
+// ─── Background task polling (shared by triggers and post-refresh resume) ───
+const _activePolls = new Set();         // task_ids with a poll loop already running
+let _activeSummarizeNames = new Set();  // recording names with an in-flight summarization
+
+// Poll a queued Celery task until it finishes. Resolves with the SUCCESS result;
+// throws on FAILURE or timeout.
+async function pollTaskStatus(taskId, { interval = 5000, maxAttempts = 720 } = {}) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const res = await fetch(`${TASK_STATUS_URL}/${encodeURIComponent(taskId)}`);
+        const data = await res.json();
+        if (data.status === "SUCCESS") return data.result;
+        if (data.status === "FAILURE") throw new Error(data.error || "Task failed");
+        await new Promise(r => setTimeout(r, interval));
+    }
+    throw new Error("Task timed out");
+}
+
+// Poll a task, registered in _activePolls so it isn't double-polled. Returns the result.
+async function pollTracked(taskId) {
+    _activePolls.add(taskId);
+    try {
+        return await pollTaskStatus(taskId);
+    } finally {
+        _activePolls.delete(taskId);
+    }
+}
+
+// Resume polling tasks still running on the worker (given /tasks/active), e.g. after a
+// page refresh. Each completion refreshes the dashboard. Deduped via _activePolls.
+function resumeActiveTasks(tasks) {
+    for (const t of tasks || []) {
+        if (!t.task_id || _activePolls.has(t.task_id)) continue;
+        pollTracked(t.task_id).then(() => loadDashboard()).catch((err) => {
+            const label = t.name ? `${t.type || "Task"} (${t.name})` : (t.type || "Task");
+            notify(`${label} failed: ${err.message}`, { title: "Background task failed" });
+            loadDashboard();
+        });
+    }
+}
 
 // ─── WebUSB device state ────────────────────────────────────────
 let _cachedDeviceData = null; // { info, files, storage } from last device probe
@@ -50,6 +320,14 @@ function formatSize(bytes) {
     return `${(mb / 1024).toFixed(2)} GB`;
 }
 
+function formatTime12Hour(time24fmt) {
+    if (!time24fmt) return "";
+    const [hours, minutes, seconds] = time24fmt.split(":").map(Number);
+    const meridiem = hours >= 12 ? "PM" : "AM";
+    const hour12fmt = hours % 12 || 12;
+    return `${String(hour12fmt).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")} ${meridiem}`;
+}
+
 function statusBadge(ok, yesIcon = "bi-check-circle-fill", noIcon = "bi-x-circle") {
     if (ok) {
         return `<span class="badge-status badge-yes"><i class="bi ${yesIcon}"></i></span>`;
@@ -61,12 +339,20 @@ function actionButtons(rec) {
     const btns = [];
     if (rec.on_local) {
         btns.push(`<button class="btn btn-sm btn-outline-secondary btn-play-audio" data-name="${rec.name}" title="Play audio"><i class="bi bi-play-circle"></i></button>`);
-        if (rec.has_transcript) {
+        if (rec.transcription_status === "queued" || rec.transcription_status === "running") {
+            // Transcription in flight (survives a page refresh — see resumeActiveTasks).
+            btns.push(`<button class="btn btn-sm btn-outline-primary" disabled title="Transcription in progress"><span class="spinner-border spinner-border-sm"></span> Transcribing…</button>`);
+        } else if (rec.has_transcript) {
             btns.push(`<button class="btn btn-sm btn-outline-success btn-view-transcript" data-name="${rec.name}" title="View transcript"><i class="bi bi-file-text"></i></button>`);
             if (rec.has_summary) {
                     btns.push(`<button class="btn btn-sm btn-outline-info btn-view-summary" data-name="${rec.name}" title="View summaries"><i class="bi bi-journal-text"></i></button>`);
             }
-            btns.push(`<button class="btn btn-sm btn-outline-warning btn-summarize" data-name="${rec.name}" title="Summarize"><i class="bi bi-stars"></i></button>`);
+            if (_activeSummarizeNames.has(rec.name)) {
+                // Summarization in flight (survives a page refresh — see resumeActiveTasks).
+                btns.push(`<button class="btn btn-sm btn-outline-warning" disabled title="Summarization in progress"><span class="spinner-border spinner-border-sm"></span> Summarizing…</button>`);
+            } else {
+                btns.push(`<button class="btn btn-sm btn-outline-warning btn-summarize" data-name="${rec.name}" title="Summarize"><i class="bi bi-stars"></i></button>`);
+            }
         } else {
             btns.push(`<div class="btn-group btn-group-sm transcribe-split" style="position:relative">
                 <button class="btn btn-outline-primary btn-transcribe" data-name="${rec.name}" data-engine="gemini" title="Transcribe with Gemini"><i class="bi bi-mic"></i></button>
@@ -110,7 +396,7 @@ function fileTypeBadge(ext) {
 }
 
 function renderRow(rec) {
-    const dateStr = rec.date && rec.time ? `${rec.date} ${rec.time}` : (rec.date || "-");
+    const dateStr = rec.date && rec.time ? `${rec.date} ${formatTime12Hour(rec.time)}` : (rec.date || "-");
     const dateCell = rec.in_db
         ? `<span class="editable-date" role="button" data-name="${rec.name}" data-recorded-at="${rec.recorded_at || ""}" title="Click to edit date/time">${dateStr} <i class="bi bi-pencil-square small text-muted"></i></span>`
         : dateStr;
@@ -402,12 +688,18 @@ async function loadDashboard() {
     hide(emptyEl);
 
     try {
-        const [res, deviceData] = await Promise.all([
+        const [res, deviceData, activeTasks] = await Promise.all([
             fetch(API_URL),
             probeWebUSBDevice(),
+            fetch(TASKS_ACTIVE_URL).then(r => r.json()).then(d => d.tasks || []).catch(() => []),
         ]);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         let data = await res.json();
+
+        // In-flight summarizations (no persisted status column) → row indicator + resume.
+        _activeSummarizeNames = new Set(
+            activeTasks.filter(t => t.type === "summarize" && t.name).map(t => t.name)
+        );
 
         // Merge device data if available
         if (deviceData) {
@@ -454,10 +746,14 @@ async function loadDashboard() {
         // Render table (filtered by current folder)
         hide(loading);
         renderFilteredTable();
+
+        // Resume polling any task still running on the worker (survives page refresh).
+        resumeActiveTasks(activeTasks);
     } catch (err) {
         hide(loading);
         errorEl.textContent = `Failed to load recordings: ${err.message}`;
         show(errorEl);
+        notify(`Failed to load recordings: ${err.message}`, { title: "Dashboard" });
     }
 }
 
@@ -483,7 +779,8 @@ function hideSyncOverlay() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    loadDashboard();
+    initNotifications();
+    loadDashboard();  // also resumes polling of any task still running after a refresh
 
     // ─── Folder tree click handler ──────────────────────────────
     document.addEventListener("click", (e) => {
@@ -864,15 +1161,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 const synced = [];
                 const skipped = [];
                 const errors = [];
-                for (const f of files) {
-                    try {
-                        if (existingNames.has(HiDockDevice.bareName(f.name))) {
-                            skipped.push(f.name);
-                            continue;
-                        }
 
-                        const data = await hidock.downloadFile(f.name, f.length);
-                        const blob = new Blob([data], { type: "audio/mpeg" });
+                // Upload a downloaded blob; classifies the result. Never rejects.
+                async function uploadOne(f, blob) {
+                    try {
                         const form = new FormData();
                         form.append("file", blob, f.name);
                         form.append("label", HiDockDevice.bareName(f.name));
@@ -885,10 +1177,37 @@ document.addEventListener("DOMContentLoaded", () => {
                         } else {
                             errors.push(`${f.name}: ${result.error}`);
                         }
+                    } catch (uploadErr) {
+                        errors.push(`${f.name}: ${uploadErr.message}`);
+                    }
+                }
+
+                // Downloads stay sequential (one USB device, one bulk transfer at a
+                // time), but uploads overlap each other and the next download. We cap
+                // in-flight uploads so memory and the server stay bounded.
+                const inFlight = new Set();
+                for (const f of files) {
+                    try {
+                        if (existingNames.has(HiDockDevice.bareName(f.name))) {
+                            skipped.push(f.name);
+                            continue;
+                        }
+
+                        const data = await hidock.downloadFile(f.name, f.length);
+                        const blob = new Blob([data], { type: "audio/mpeg" });
+
+                        while (inFlight.size >= UPLOAD_CONCURRENCY) {
+                            await Promise.race(inFlight);
+                        }
+                        const task = uploadOne(f, blob).finally(() => inFlight.delete(task));
+                        inFlight.add(task);
                     } catch (fileErr) {
                         errors.push(`${f.name}: ${fileErr.message}`);
                     }
                 }
+
+                // Let the remaining uploads finish before closing/reporting.
+                await Promise.all(inFlight);
 
                 await hidock.close();
 
@@ -903,6 +1222,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         msg += `<br><small class="text-muted">Warnings: ${errors.join("; ")}</small>`;
                     }
                     alert.innerHTML = msg;
+                    notify(`Synced ${synced.length} file(s) from device.`, { level: "success", title: "Sync complete" });
                 } else if (skipped.length > 0 && errors.length === 0) {
                     alert.className = "alert alert-info";
                     alert.innerHTML = `<i class="bi bi-info-circle me-1"></i> All ${skipped.length} file(s) already synced - nothing new to download.`;
@@ -913,6 +1233,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         msg += `<br><small class="text-muted">Skipped ${skipped.length} already-synced file(s).</small>`;
                     }
                     alert.innerHTML = msg;
+                    notify(`Sync failed: ${errors.join("; ")}`, { title: "Sync failed" });
                 } else {
                     alert.className = "alert alert-info";
                     alert.innerHTML = `<i class="bi bi-info-circle me-1"></i> No new files to sync.`;
@@ -923,6 +1244,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 alert.className = "alert alert-danger";
                 alert.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i> Sync failed: ${err.message}`;
                 show(alert);
+                notify(`Sync failed: ${err.message}`, { title: "Sync failed" });
             } finally {
                 hideSyncOverlay();
                 icon.classList.remove("spin");
@@ -1008,42 +1330,49 @@ document.addEventListener("DOMContentLoaded", () => {
         uploadSubmitBtn.addEventListener("click", async () => {
             if (!uploadFileInput.files || uploadFileInput.files.length === 0) return;
 
-            const file = uploadFileInput.files[0];
-            const label = uploadLabelInput ? uploadLabelInput.value.trim() : "";
+            const files = Array.from(uploadFileInput.files);
+            // A single shared label only makes sense for one file; with multiple,
+            // let each recording default to its own name (backend does this on empty label).
+            const label = (files.length === 1 && uploadLabelInput) ? uploadLabelInput.value.trim() : "";
 
             hide(uploadFormSection);
             show(uploadProgress);
             hide(uploadResult);
 
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("label", label);
-
-            try {
+            const results = await runPool(files, UPLOAD_CONCURRENCY, async (file) => {
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("label", label);
                 const res = await fetch(UPLOAD_URL, { method: "POST", body: formData });
                 const data = await res.json();
+                if (!data.ok) throw new Error(data.error || "Upload failed");
+                return data;
+            });
 
-                hide(uploadProgress);
-                if (data.ok) {
-                    uploadResult.className = "alert alert-success mt-3";
-                    uploadResult.innerHTML = `<i class="bi bi-check-circle me-1"></i>${data.message}`;
-                    show(uploadResult);
-                    setTimeout(async () => {
-                        closeUploadModal();
-                        await loadDashboard();
-                    }, 1200);
-                } else {
-                    uploadResult.className = "alert alert-danger mt-3";
-                    uploadResult.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i>${data.error}`;
-                    show(uploadResult);
-                    show(uploadFormSection);
-                }
-            } catch (err) {
-                hide(uploadProgress);
-                uploadResult.className = "alert alert-danger mt-3";
-                uploadResult.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i>Upload failed: ${err.message}`;
+            const succeeded = [];
+            const failed = [];
+            results.forEach((r, i) => {
+                if (r.status === "fulfilled") succeeded.push(files[i].name);
+                else failed.push(`${files[i].name}: ${r.reason.message}`);
+            });
+
+            hide(uploadProgress);
+            if (failed.length === 0) {
+                uploadResult.className = "alert alert-success mt-3";
+                uploadResult.innerHTML = `<i class="bi bi-check-circle me-1"></i>Uploaded ${succeeded.length} file(s) successfully`;
                 show(uploadResult);
+                setTimeout(async () => {
+                    closeUploadModal();
+                    await loadDashboard();
+                }, 1200);
+            } else {
+                uploadResult.className = succeeded.length > 0 ? "alert alert-warning mt-3" : "alert alert-danger mt-3";
+                const okMsg = succeeded.length > 0 ? `Uploaded ${succeeded.length} file(s). ` : "";
+                uploadResult.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i>${okMsg}Failed ${failed.length}:<ul class="mb-0 mt-1">${failed.map(e => `<li>${e}</li>`).join("")}</ul>`;
+                show(uploadResult);
+                notify(`${okMsg}Failed ${failed.length}: ${failed.join("; ")}`, { level: succeeded.length > 0 ? "warning" : "error", title: "Upload" });
                 show(uploadFormSection);
+                if (succeeded.length > 0) await loadDashboard();
             }
         });
     }
@@ -1110,6 +1439,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const transcriptAudioPlayer = $("#transcript-audio-player");
     const transcriptAudio = $("#transcript-audio");
     const modalError = $("#transcript-error");
+    const transcriptDeleteBtn = $("#transcript-delete-btn");
     let currentTranscriptName = null;
 
     function extractSpeakerNames(transcript) {
@@ -1183,6 +1513,7 @@ document.addEventListener("DOMContentLoaded", () => {
          hide(modalContent);
          hide(transcriptEditor);
          hide(transcriptSaveBtn);
+         hide(transcriptDeleteBtn);
          hide(transcriptSpeakerEditor);
          hide(transcriptSaveFeedback);
          hide(transcriptAudioPlayer);
@@ -1201,6 +1532,7 @@ document.addEventListener("DOMContentLoaded", () => {
          modalContent.innerHTML = formatTranscript(transcript || "");
          transcriptEditor.value = transcript || "";
          show(modalContent);
+         show(transcriptDeleteBtn);
          show(transcriptAudioPlayer);
          if (currentTranscriptName && transcriptAudio) {
              transcriptAudio.src = `${AUDIO_URL}/${encodeURIComponent(currentTranscriptName)}`;
@@ -1267,18 +1599,28 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             const data = await res.json();
 
-            hide(modalLoading);
-            if (data.ok) {
+            if (data.status === "queued" || data.status === "already_running") {
+                // Queued on a Celery worker — poll until it finishes.
+                const result = await pollTracked(data.task_id);
+                hide(modalLoading);
+                showTranscriptPreview(result.transcript);
+                await loadDashboard();
+            } else if (data.ok) {
+                // Already cached — returned synchronously.
+                hide(modalLoading);
                 showTranscriptPreview(data.transcript);
                 await loadDashboard();
             } else {
+                hide(modalLoading);
                 modalError.textContent = data.error;
                 show(modalError);
+                notify(`${name}: ${data.error || "transcription failed"}`, { title: "Transcription failed" });
             }
         } catch (err) {
             hide(modalLoading);
             modalError.textContent = `Transcription failed: ${err.message}`;
             show(modalError);
+            notify(`${name}: ${err.message}`, { title: "Transcription failed" });
         } finally {
             if (triggerBtn) {
                 triggerBtn.disabled = false;
@@ -1418,6 +1760,38 @@ document.addEventListener("DOMContentLoaded", () => {
             } finally {
                 transcriptSaveBtn.disabled = false;
                 transcriptSaveBtn.innerHTML = '<i class="bi bi-check-lg"></i> Save';
+            }
+        });
+    }
+
+    if (transcriptDeleteBtn) {
+        transcriptDeleteBtn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            if (!currentTranscriptName) return;
+            if (!confirm("Delete this transcription? This also removes its summaries, tasks, and search-index entries. The recording/audio is kept.")) return;
+
+            transcriptDeleteBtn.disabled = true;
+            transcriptDeleteBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+            hide(transcriptSaveFeedback);
+
+            try {
+                const res = await fetch(`${TRANSCRIPT_URL}/${encodeURIComponent(currentTranscriptName)}`, { method: "DELETE" });
+                const data = await res.json();
+                if (data.ok) {
+                    closeTranscriptModal();
+                    await loadDashboard();
+                } else {
+                    transcriptSaveFeedback.className = "small mt-2 text-danger";
+                    transcriptSaveFeedback.textContent = data.error || "Delete failed";
+                    show(transcriptSaveFeedback);
+                }
+            } catch (err) {
+                transcriptSaveFeedback.className = "small mt-2 text-danger";
+                transcriptSaveFeedback.textContent = `Delete failed: ${err.message}`;
+                show(transcriptSaveFeedback);
+            } finally {
+                transcriptDeleteBtn.disabled = false;
+                transcriptDeleteBtn.innerHTML = '<i class="bi bi-trash3"></i> Delete';
             }
         });
     }
@@ -1740,6 +2114,15 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             const data = await res.json();
 
+            // Queued on a Celery worker — wait for it to finish before refreshing.
+            if (data.ok && data.task_id) {
+                // Flip the row's button to "Summarizing…" immediately, without
+                // waiting for the next loadDashboard() to repopulate the set.
+                _activeSummarizeNames.add(currentSummarizeName);
+                renderFilteredTable();
+                await pollTracked(data.task_id);
+            }
+
             hide(summaryLoading);
             if (data.ok) {
                 const summariesRes = await fetch(`${SUMMARIES_URL}/${encodeURIComponent(currentSummarizeName)}`);
@@ -1754,11 +2137,17 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 summaryError.textContent = data.error;
                 show(summaryError);
+                notify(`${currentSummarizeName}: ${data.error || "summarization failed"}`, { title: "Summarization failed" });
+                _activeSummarizeNames.delete(currentSummarizeName);
+                renderFilteredTable();
             }
         } catch (err) {
             hide(summaryLoading);
             summaryError.textContent = `Summarization failed: ${err.message}`;
             show(summaryError);
+            notify(`${currentSummarizeName}: ${err.message}`, { title: "Summarization failed" });
+            _activeSummarizeNames.delete(currentSummarizeName);
+            renderFilteredTable();
         }
     });
 
@@ -2129,23 +2518,31 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify({ summary_id: summaryId }),
             });
             const data = await res.json();
-            hide(tasksLoading);
 
-            if (data.ok && data.tasks && data.tasks.length > 0) {
+            if (data.ok && data.task_id) {
+                // Queued on a Celery worker — poll, then load the generated tasks.
+                await pollTracked(data.task_id);
+                await loadTasks(summaryId);
+            } else if (data.ok && data.tasks && data.tasks.length > 0) {
+                hide(tasksLoading);
                 tasksContent.innerHTML = renderTasksList(data.tasks, summaryId);
                 show(tasksContent);
                 hide(tasksEmpty);
             } else if (data.ok) {
+                hide(tasksLoading);
                 hide(tasksContent);
                 show(tasksEmpty);
             } else {
+                hide(tasksLoading);
                 tasksError.textContent = data.error || "Task generation failed";
                 show(tasksError);
+                notify(data.error || "Task generation failed", { title: "Task generation failed" });
             }
         } catch (err) {
             hide(tasksLoading);
             tasksError.textContent = `Task generation failed: ${err.message}`;
             show(tasksError);
+            notify(`Task generation failed: ${err.message}`, { title: "Task generation failed" });
         }
     }
 

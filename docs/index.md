@@ -9,6 +9,8 @@ Welcome to the AgenDino docs. Use the links below to navigate to any topic.
 | Guide | Description |
 |-------|-------------|
 | [Getting Started](getting-started.md) | Installation, configuration, and first run |
+| [Docker Deployment](docker.md) | Run the full stack (web, Celery, Redis, Traefik) with Docker Compose; GPU toggle |
+| [Async Processing (Celery)](../CELERY_GUIDE.md) | Background transcription/summarization workers and scaling |
 
 ## Core Features
 

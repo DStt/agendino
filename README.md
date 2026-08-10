@@ -33,10 +33,10 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create a `.env` file with your Gemini API key:
+Copy the example config and set your Gemini API key:
 
-```env
-GEMINI_API_KEY=your-gemini-api-key
+```bash
+cp .env.example .env   # then edit .env and set GEMINI_API_KEY
 ```
 
 Start the server:
@@ -56,11 +56,11 @@ Browse the full documentation at **[docs/index.md](docs/index.md)**.
 
 | Section | Topics |
 |---------|--------|
-| **Setup** | [Getting Started](docs/getting-started.md) |
+| **Setup** | [Getting Started](docs/getting-started.md) · [Docker Deployment](docs/docker.md) |
 | **Core** | [HiDock](docs/hidock-integration.md) · [Recordings](docs/recording-management.md) · [Calendar](docs/calendar.md) |
 | **AI** | [Transcription](docs/transcription.md) · [Summarization](docs/summarization.md) · [Tasks](docs/task-generation.md) · [Recap](docs/daily-recap.md) · [Knowledge](docs/knowledge-base.md) · [Proactor](docs/proactive-analysis.md) |
 | **Advanced** | [Notion](docs/notion-publishing.md) · [Auth](docs/authentication.md) · [Prompts](docs/custom-system-prompts.md) |
-| **Reference** | [API Endpoints](docs/api-reference.md) · [Project Structure](docs/project-structure.md) |
+| **Reference** | [API Endpoints](docs/api-reference.md) · [Project Structure](docs/project-structure.md) · [Celery Guide](CELERY_GUIDE.md) |
 
 ## Running Tests
 

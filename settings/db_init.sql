@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS recording
     folder          TEXT    NOT NULL DEFAULT '/'
 );
 
+-- Recording names are the logical key (used for dedup on upload); enforce uniqueness.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_recording_name ON recording (name);
+
 CREATE TABLE IF NOT EXISTS summary
 (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,

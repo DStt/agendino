@@ -1,0 +1,100 @@
+services:
+  agendino:
+    build: .
+    expose:
+      - 8000
+    volumes:
+      - "./local_recordings:/app/local_recordings"
+      - "./settings:/app/settings"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fastapi.rule=Host(`${INTERNAL_IP:-127.0.0.1}`)"
+      - "traefik.http.routers.fastapi.tls=true"
+    # App config (GEMINI_API_KEY, DATABASE_NAME, NOTION_*, WHISPER_*, etc.) is injected
+    # at runtime from .env — it is intentionally NOT baked into the image (see .dockerignore).
+    env_file:
+      - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      # One knob drives uvicorn workers AND the dashboard's parallel upload limit.
+      # Override via your shell or .env.
+      - WEB_CONCURRENCY=${WEB_CONCURRENCY:-4}
+      # Only used by EMBEDDING_PROVIDER=local (in-process); GPU=1 makes 'auto' resolve to CUDA.
+      - LOCAL_EMBEDDING_DEVICE=auto
+      - HF_HOME=/app/settings/hf_cache      # cache the local model on the settings volume
+    depends_on:
+      - redis
+      - ollama
+    # $$ escapes Compose interpolation so the value is read from the container env at runtime.
+    command: sh -c "uvicorn main:app --host 0.0.0.0 --port 8000 --workers $${WEB_CONCURRENCY:-4}"
+
+  celery:
+    build: .
+    working_dir: /app/src
+    volumes:
+      - "./local_recordings:/app/local_recordings"
+      - "./settings:/app/settings"
+    # Same .env config the web service uses (injected at runtime, not baked into the image).
+    env_file:
+      - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      # Whisper auto-selects the GPU when one is reserved (see compose.gpu.yaml), else CPU.
+      - WHISPER_DEVICE=auto
+      - WHISPER_COMPUTE_TYPE=auto
+      # Persist downloaded Whisper models on the mounted settings volume.
+      - HF_HOME=/app/settings/hf_cache
+      # Parallel heavy jobs (transcription/summarization). Tune per CPU/GPU — see docs/docker.md.
+      # Set CELERY_CONCURRENCY in your shell or .env to override the default of 1.
+      - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-1}
+    # $$ escapes Compose interpolation so the value is read from the container env at runtime.
+    command: sh -c "celery -A celery_tasks worker --loglevel=info --concurrency=$${CELERY_CONCURRENCY:-1}"
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    expose:
+      - 6379
+
+  # Shared local embeddings + RAG generation. CPU by default; GPU=1 reserves a GPU (compose.gpu.yaml).
+  ollama:
+    image: ollama/ollama
+    expose:
+      - 11434
+    volumes:
+      # Under settings/ like vector_store & hf_cache; Docker auto-creates it on first `up`.
+      - "./settings/ollama_models:/root/.ollama"
+    environment:
+      - OLLAMA_KEEP_ALIVE=5m
+      - OLLAMA_MAX_LOADED_MODELS=2          # embedding + generation models both resident
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_CONTEXT_LENGTH=8192          # so /ask sees the full top-k (default ~4096 clips); +VRAM
+    # Serve, then pull each model only if not already cached (later starts skip it; offline-friendly).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        until ollama list >/dev/null 2>&1; do sleep 1; done
+        ollama list | grep -qF "${OLLAMA_EMBEDDING_MODEL:-bge-m3}" || ollama pull "${OLLAMA_EMBEDDING_MODEL:-bge-m3}" || true
+        ollama list | grep -qF "${OLLAMA_MODEL:-qwen2.5:7b}" || ollama pull "${OLLAMA_MODEL:-qwen2.5:7b}" || true
+        wait
+    restart: unless-stopped
+
+  traefik:
+    build:
+      context: .
+      dockerfile: Dockerfile.traefik
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./certs:/certs:ro"
+      - "./dynamic:/etc/traefik/dynamic:ro"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`${INTERNAL_IP:-127.0.0.1}`) && (PathPrefix(`/traefik/api`) || PathPrefix(`/traefik/dashboard`))"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.service=api@internal"

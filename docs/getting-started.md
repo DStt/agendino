@@ -53,33 +53,16 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 ## Configuration
 
-Create a `.env` file in the project root:
+Copy the example env file and fill it in — at minimum set `GEMINI_API_KEY`:
 
-```env
-# Required - Google Gemini API key
-GEMINI_API_KEY=your-gemini-api-key
-
-# Optional - Gemini model names (defaults shown)
-GEMINI_MODEL=gemini-2.5-flash
-GEMINI_EMBEDDING_MODEL=text-embedding-001
-
-# Optional - Notion integration
-NOTION_API_KEY=your-notion-integration-token
-NOTION_PAGE_ID=your-notion-parent-page-id
-
-# Optional - SQLite database name (default: agendino.db)
-DATABASE_NAME=agendino.db
-
-# Optional - Enable login authentication (default: false)
-AUTH_ENABLED=false
-
-# Optional - Local Whisper transcription settings
-WHISPER_MODEL_SIZE=small          # tiny | base | small | medium | large-v3
-WHISPER_DEVICE=cpu                # cpu | cuda
-WHISPER_COMPUTE_TYPE=auto         # auto | int8 | float16 | float32
+```bash
+cp .env.example .env
 ```
 
-See [Authentication](authentication.md) for details on `AUTH_ENABLED` and [Transcription](transcription.md) for Whisper settings.
+Every variable (Gemini, summarization provider, Whisper, Notion, auth, deployment/tuning) is
+documented in `.env.example`. For a local (non-Docker) run, set `WHISPER_DEVICE=cuda` there to
+use a GPU. See [Authentication](authentication.md) for `AUTH_ENABLED` and
+[Transcription](transcription.md) for Whisper settings.
 
 ## Running the Server
 
