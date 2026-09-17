@@ -14,7 +14,7 @@ router = APIRouter()
 
 
 @router.get("/month/{year}/{month}")
-async def get_calendar_month(
+def get_calendar_month(
     year: int,
     month: int,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
@@ -23,7 +23,7 @@ async def get_calendar_month(
 
 
 @router.get("/day/{date_str}")
-async def get_calendar_day(
+def get_calendar_day(
     date_str: str,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
@@ -31,7 +31,7 @@ async def get_calendar_day(
 
 
 @router.get("/day-detail/{date_str}")
-async def get_day_detail(
+def get_day_detail(
     date_str: str,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
@@ -39,7 +39,7 @@ async def get_day_detail(
 
 
 @router.post("/events")
-async def create_calendar_event(
+def create_calendar_event(
     body: CreateCalendarEventDTO,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
@@ -55,7 +55,7 @@ async def create_calendar_event(
 
 
 @router.patch("/events/{event_id}")
-async def update_calendar_event(
+def update_calendar_event(
     event_id: int,
     body: UpdateCalendarEventDTO,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
@@ -65,7 +65,7 @@ async def update_calendar_event(
 
 
 @router.delete("/events/{event_id}")
-async def delete_calendar_event(
+def delete_calendar_event(
     event_id: int,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
@@ -73,7 +73,7 @@ async def delete_calendar_event(
 
 
 @router.post("/link")
-async def link_recording_to_event(
+def link_recording_to_event(
     body: LinkRecordingEventDTO,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
@@ -81,7 +81,7 @@ async def link_recording_to_event(
 
 
 @router.delete("/link")
-async def unlink_recording_from_event(
+def unlink_recording_from_event(
     body: LinkRecordingEventDTO,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
@@ -92,7 +92,7 @@ async def unlink_recording_from_event(
 
 
 @router.post("/recap/{date_str}")
-async def generate_daily_recap(
+def generate_daily_recap(
     date_str: str,
     provider: str | None = Query(None),
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
@@ -101,7 +101,7 @@ async def generate_daily_recap(
 
 
 @router.get("/recap/{date_str}")
-async def get_daily_recap(
+def get_daily_recap(
     date_str: str,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
@@ -109,7 +109,7 @@ async def get_daily_recap(
 
 
 @router.delete("/recap/{date_str}")
-async def delete_daily_recap(
+def delete_daily_recap(
     date_str: str,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
@@ -120,14 +120,14 @@ async def delete_daily_recap(
 
 
 @router.get("/shared")
-async def list_shared_calendars(
+def list_shared_calendars(
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
     return calendar_controller.list_shared_calendars()
 
 
 @router.post("/shared")
-async def create_shared_calendar(
+def create_shared_calendar(
     body: CreateSharedCalendarDTO,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
@@ -141,14 +141,14 @@ async def create_shared_calendar(
 
 
 @router.post("/shared/sync-all")
-async def sync_all_shared_calendars(
+def sync_all_shared_calendars(
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
     return calendar_controller.sync_all_shared_calendars()
 
 
 @router.post("/shared/validate")
-async def validate_ical_url(
+def validate_ical_url(
     body: CreateSharedCalendarDTO,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
@@ -156,7 +156,7 @@ async def validate_ical_url(
 
 
 @router.patch("/shared/{calendar_id}")
-async def update_shared_calendar(
+def update_shared_calendar(
     calendar_id: int,
     body: UpdateSharedCalendarDTO,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
@@ -166,7 +166,7 @@ async def update_shared_calendar(
 
 
 @router.delete("/shared/{calendar_id}")
-async def delete_shared_calendar(
+def delete_shared_calendar(
     calendar_id: int,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
@@ -174,7 +174,7 @@ async def delete_shared_calendar(
 
 
 @router.post("/shared/{calendar_id}/sync")
-async def sync_shared_calendar(
+def sync_shared_calendar(
     calendar_id: int,
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):

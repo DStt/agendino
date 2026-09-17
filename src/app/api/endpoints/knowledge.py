@@ -9,28 +9,28 @@ router = APIRouter()
 
 
 @router.get("/stats")
-async def get_stats(
+def get_stats(
     rag_controller: RAGController = Depends(depends.get_rag_controller),
 ):
     return rag_controller.get_stats()
 
 
 @router.get("/summaries")
-async def list_summaries(
+def list_summaries(
     rag_controller: RAGController = Depends(depends.get_rag_controller),
 ):
     return rag_controller.list_summaries()
 
 
 @router.post("/load")
-async def load_summaries(
+def load_summaries(
     rag_controller: RAGController = Depends(depends.get_rag_controller),
 ):
     return rag_controller.load_summaries()
 
 
 @router.post("/search")
-async def search(
+def search(
     body: RAGQueryRequestDTO,
     rag_controller: RAGController = Depends(depends.get_rag_controller),
 ):
@@ -38,7 +38,7 @@ async def search(
 
 
 @router.post("/ask")
-async def ask(
+def ask(
     body: RAGQueryRequestDTO,
     rag_controller: RAGController = Depends(depends.get_rag_controller),
 ):
@@ -51,7 +51,7 @@ async def ask(
 
 
 @router.post("/mindmap")
-async def get_mind_map(
+def get_mind_map(
     body: MindMapRequestDTO | None = None,
     rag_controller: RAGController = Depends(depends.get_rag_controller),
 ):
@@ -60,7 +60,7 @@ async def get_mind_map(
 
 
 @router.post("/mindmap/generate")
-async def generate_mind_map(
+def generate_mind_map(
     body: MindMapRequestDTO | None = None,
     rag_controller: RAGController = Depends(depends.get_rag_controller),
 ):
@@ -70,7 +70,7 @@ async def generate_mind_map(
 
 
 @router.post("/clear")
-async def clear_vector_store(
+def clear_vector_store(
     rag_controller: RAGController = Depends(depends.get_rag_controller),
 ):
     return rag_controller.clear_vector_store()

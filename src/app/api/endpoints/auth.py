@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from app import depends
 from app.auth_middleware import SESSION_COOKIE
+from app.client_ip import get_client_ip
 from services.AuthService import AuthService
 
 router = APIRouter()
@@ -17,8 +18,8 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/login")
-async def login(body: LoginRequest, request: Request, auth_service: AuthService = Depends(depends.get_auth_service)):
-    client_ip = request.client.host if request.client else "unknown"
+def login(body: LoginRequest, request: Request, auth_service: AuthService = Depends(depends.get_auth_service)):
+    client_ip = get_client_ip(request)
 
     if not auth_service.authenticate(body.username, body.password):
         auth_service.ban_ip(client_ip)
@@ -38,7 +39,7 @@ async def login(body: LoginRequest, request: Request, auth_service: AuthService 
 
 
 @router.post("/logout")
-async def logout(request: Request, auth_service: AuthService = Depends(depends.get_auth_service)):
+def logout(request: Request, auth_service: AuthService = Depends(depends.get_auth_service)):
     token = request.cookies.get(SESSION_COOKIE)
     if token:
         auth_service.destroy_session(token)

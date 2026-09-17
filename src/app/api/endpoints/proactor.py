@@ -8,7 +8,7 @@ router = APIRouter()
 
 
 @router.get("/analyze")
-async def proactor_analyze(
+def proactor_analyze(
     start: str,
     end: str,
     proactor_controller: ProactorController = Depends(depends.get_proactor_controller),
@@ -17,7 +17,7 @@ async def proactor_analyze(
 
 
 @router.post("/analyze")
-async def proactor_analyze_post(
+def proactor_analyze_post(
     body: ProactorAnalyzeRequestDTO,
     proactor_controller: ProactorController = Depends(depends.get_proactor_controller),
 ):
