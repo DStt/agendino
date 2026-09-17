@@ -98,6 +98,8 @@
 
     {% block modals %}{% endblock %}
 
+    <script src="/static/vendor/purify.min.js"></script>
+    <script src="/static/sanitize.js"></script>
     <script>window.__AI_CONFIG__ = {{ ai_config | default({}) | tojson }};</script>
     <script src="/static/ai-providers.js"></script>
     <script src="/static/app.js"></script>

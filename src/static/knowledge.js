@@ -60,7 +60,7 @@
         container.innerHTML = '';
         for (const s of filterSummaries) {
             const tags = (s.tags || []).filter(t => t.trim());
-            const tagsHtml = tags.map(t => `<span class="badge bg-secondary me-1">${t.trim()}</span>`).join('');
+            const tagsHtml = tags.map(t => `<span class="badge bg-secondary me-1">${escapeHtml(t.trim())}</span>`).join('');
             const isChecked = !activeFilterIds || activeFilterIds.includes(s.id);
             const div = document.createElement('div');
             div.className = 'ai-picker-item';
@@ -68,8 +68,8 @@
                 <input class="form-check-input mt-1 filter-summary-cb" type="checkbox"
                        value="${s.id}" id="filter-${s.id}" ${isChecked ? 'checked' : ''}>
                 <label for="filter-${s.id}">
-                    <span class="picker-title">${s.title}</span>
-                    <small class="text-muted ms-1">${s.recording_name}</small>
+                    <span class="picker-title">${escapeHtml(s.title)}</span>
+                    <small class="text-muted ms-1">${escapeHtml(s.recording_name)}</small>
                     ${tagsHtml ? `<div class="picker-tags">${tagsHtml}</div>` : ''}
                 </label>
             `;
@@ -290,15 +290,15 @@
 
                 if (summary.tags && summary.tags.length > 0) {
                     tagsEl.innerHTML = summary.tags
-                        .map(t => `<span class="badge bg-secondary me-1">${t}</span>`)
+                        .map(t => `<span class="badge bg-secondary me-1">${escapeHtml(t)}</span>`)
                         .join('');
                 }
-                contentEl.innerHTML = marked.parse(summary.summary || '');
+                contentEl.innerHTML = renderMarkdown(summary.summary || '');
             } else {
                 contentEl.innerHTML = '<p class="text-muted">Summary not found.</p>';
             }
         } catch (e) {
-            contentEl.innerHTML = `<p class="text-danger">Failed to load summary: ${e.message}</p>`;
+            contentEl.innerHTML = `<p class="text-danger">Failed to load summary: ${escapeHtml(e.message)}</p>`;
         }
     }
 
@@ -341,14 +341,14 @@
         container.innerHTML = '';
         for (const s of pickerSummaries) {
             const tags = (s.tags || []).filter(t => t.trim());
-            const tagsHtml = tags.map(t => `<span class="badge bg-secondary me-1">${t.trim()}</span>`).join('');
+            const tagsHtml = tags.map(t => `<span class="badge bg-secondary me-1">${escapeHtml(t.trim())}</span>`).join('');
             const div = document.createElement('div');
             div.className = 'ai-picker-item';
             div.innerHTML = `
                 <input class="form-check-input mt-1" type="checkbox" value="${s.id}" id="pick-${s.id}" checked>
                 <label for="pick-${s.id}">
-                    <span class="picker-title">${s.title}</span>
-                    <small class="text-muted ms-1">${s.recording_name}</small>
+                    <span class="picker-title">${escapeHtml(s.title)}</span>
+                    <small class="text-muted ms-1">${escapeHtml(s.recording_name)}</small>
                     ${tagsHtml ? `<div class="picker-tags">${tagsHtml}</div>` : ''}
                 </label>
             `;
@@ -603,7 +603,7 @@
             hide($('rag-loading'));
 
             if (data.ok) {
-                $('rag-answer-content').innerHTML = marked.parse(data.answer);
+                $('rag-answer-content').innerHTML = renderMarkdown(data.answer);
 
                 const sourcesEl = $('rag-sources');
                 sourcesEl.innerHTML = '';
@@ -665,11 +665,11 @@
                         const tagsHtml = meta.tags
                             ? meta.tags.split(',')
                                 .filter(t => t.trim())
-                                .map(t => `<span class="badge bg-secondary me-1">${t.trim()}</span>`)
+                                .map(t => `<span class="badge bg-secondary me-1">${escapeHtml(t.trim())}</span>`)
                                 .join('')
                             : '';
 
-                        const preview = (r.document || '').substring(0, 250).replace(/</g, '&lt;');
+                        const preview = escapeHtml((r.document || '').substring(0, 250));
 
                         const card = document.createElement('div');
                         card.className = 'card mb-2 search-result-card';
@@ -677,8 +677,8 @@
                             <div class="card-body py-2 px-3">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div>
-                                        <strong>${meta.title || meta.recording_name || 'Untitled'}</strong>
-                                        <small class="text-muted ms-2">${meta.recording_name || ''}</small>
+                                        <strong>${escapeHtml(meta.title || meta.recording_name || 'Untitled')}</strong>
+                                        <small class="text-muted ms-2">${escapeHtml(meta.recording_name || '')}</small>
                                     </div>
                                     <span class="badge bg-primary">Score: ${similarity}</span>
                                 </div>

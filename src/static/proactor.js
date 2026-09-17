@@ -117,8 +117,8 @@
 
     function calBadge(ev) {
         const name = ev.calendar_name || "Local";
-        const color = ev.calendar_color || "var(--bs-primary)";
-        return `<span class="badge proactor-cal-badge" style="background:${esc(color)}">${esc(name)}</span>`;
+        const color = window.safeColor(ev.calendar_color, "var(--bs-primary)");
+        return `<span class="badge proactor-cal-badge" style="background:${color}">${esc(name)}</span>`;
     }
 
     // ── UI states ───────────────────────────────────────────────
@@ -254,7 +254,7 @@
             $timelineBody.innerHTML = timelines.map(day => {
                 const barSegments = day.segments.map(seg => {
                     if (seg.type === "meeting") {
-                        const bg = seg.calendar_color || "#495057";
+                        const bg = window.safeColor(seg.calendar_color, "#495057");
                         const tip = `${esc(seg.title || "Meeting")}${seg.calendar_name ? " (" + esc(seg.calendar_name) + ")" : ""}\n${seg.start}–${seg.end} (${Math.round(seg.minutes)} min)`;
                         return `<div class="tl-seg tl-meeting" style="width:${seg.pct}%;background:${bg}" title="${tip}"></div>`;
                     }
@@ -289,9 +289,11 @@
 
     // ── Escape HTML ─────────────────────────────────────────────
     function esc(str) {
+        if (typeof window.escapeHtml === "function") return window.escapeHtml(str);
         const d = document.createElement("div");
         d.textContent = str || "";
-        return d.innerHTML;
+        // innerHTML escapes &, < and > but not quotes, which break attributes.
+        return d.innerHTML.replace(/"/g, "&quot;");
     }
 
     // ── API call ────────────────────────────────────────────────

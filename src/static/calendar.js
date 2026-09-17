@@ -47,7 +47,15 @@ function escapeHtml(text) {
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+// Only allow simple hex colors in style attributes (shared-calendar colors).
+function safeColor(color, fallback) {
+    const value = String(color || "");
+    if (/^#[0-9a-fA-F]{3,8}$/.test(value)) return value;
+    return fallback || "var(--bs-primary)";
 }
 
 function formatMarkdown(text) {
@@ -130,7 +138,7 @@ function createDayCell(ds, dayNum, isOther) {
     let chips = "";
     for (const ev of dayEvents.slice(0, 3)) {
         const t = timeFromISO(ev.start_at);
-        const colorStyle = ev.calendar_color ? `border-left:3px solid ${ev.calendar_color};` : "";
+        const colorStyle = ev.calendar_color ? `border-left:3px solid ${safeColor(ev.calendar_color)};` : "";
         const cancelled = ev.status === "cancelled";
         const titleHtml = cancelled ? `<s>${t ? t + " " : ""}${escapeHtml(ev.title)}</s>` : `${t ? t + " " : ""}${escapeHtml(ev.title)}`;
         chips += `<span class="cal-event-chip${cancelled ? " cal-event-cancelled" : ""}" style="${colorStyle}">${titleHtml}</span>`;
@@ -213,7 +221,7 @@ async function loadDayDetail(ds) {
         show($("#day-detail-content"));
     } catch (err) {
         hide($("#day-detail-loading"));
-        $("#day-events-list").innerHTML = `<div class="alert alert-danger">Failed to load: ${err.message}</div>`;
+        $("#day-events-list").innerHTML = `<div class="alert alert-danger">Failed to load: ${escapeHtml(err.message)}</div>`;
         show($("#day-detail-content"));
     }
 }
@@ -246,7 +254,7 @@ function renderDayEvents(events) {
                 <div class="d-flex justify-content-between align-items-start">
                     <div style="min-width:0;flex:1">
                         <span class="badge bg-success-subtle text-success-emphasis me-1"><i class="bi bi-mic me-1"></i>${escapeHtml(lr.name)}</span>
-                        <span class="badge bg-secondary-subtle text-secondary-emphasis" style="font-size:.65em">${lr.link_source}</span>
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis" style="font-size:.65em">${escapeHtml(lr.link_source)}</span>
                         ${summaryTitle ? `<div class="linked-rec-title mt-1">${summaryTitle}</div>` : ""}
                         ${tags ? `<div class="mt-1">${tags}</div>` : ""}
                         ${preview ? `<div class="linked-rec-preview">${preview}</div>` : ""}
@@ -259,7 +267,7 @@ function renderDayEvents(events) {
             </div>`;
         }).join("");
 
-        const borderColor = ev.calendar_color ? `border-left:3px solid ${ev.calendar_color};` : "";
+        const borderColor = ev.calendar_color ? `border-left:3px solid ${safeColor(ev.calendar_color)};` : "";
         const isShared = ev.shared_calendar_id != null;
         const isCancelled = ev.status === "cancelled";
         const isTentative = ev.status === "tentative";
@@ -273,7 +281,7 @@ function renderDayEvents(events) {
             : escapeHtml(ev.title);
         const calBadge = isShared ? (() => {
             const sc = sharedCalendars.find(c => c.id === ev.shared_calendar_id);
-            return sc ? `<span class="badge me-1" style="background:${sc.color}22;color:${sc.color};border:1px solid ${sc.color}44"><i class="bi bi-cloud me-1"></i>${escapeHtml(sc.name)}</span>` : "";
+            return sc ? `<span class="badge me-1" style="background:${safeColor(sc.color)}22;color:${safeColor(sc.color)};border:1px solid ${safeColor(sc.color)}44"><i class="bi bi-cloud me-1"></i>${escapeHtml(sc.name)}</span>` : "";
         })() : "";
 
         return `<div class="day-event-card${isCancelled ? " day-event-cancelled" : ""}" data-event-id="${ev.id}" style="${borderColor}${isCancelled ? "opacity:.65;" : ""}">
@@ -645,7 +653,7 @@ function renderCalendarLegend() {
     let html = '<small class="text-muted fw-bold me-1"><i class="bi bi-circle-fill me-1" style="color:var(--bs-primary);font-size:.5rem"></i>Local</small>';
     for (const cal of sharedCalendars) {
         if (!cal.is_enabled) continue;
-        html += `<small class="text-muted fw-bold me-1"><i class="bi bi-circle-fill me-1" style="color:${escapeHtml(cal.color)};font-size:.5rem"></i>${escapeHtml(cal.name)}</small>`;
+        html += `<small class="text-muted fw-bold me-1"><i class="bi bi-circle-fill me-1" style="color:${safeColor(cal.color)};font-size:.5rem"></i>${escapeHtml(cal.name)}</small>`;
     }
     items.innerHTML = html;
     show(container);
@@ -672,7 +680,7 @@ function renderSharedCalendarPanel() {
         return `<div class="shared-cal-item ${enabledClass}">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center gap-2">
-                    <span class="shared-cal-dot" style="background:${escapeHtml(cal.color)}"></span>
+                    <span class="shared-cal-dot" style="background:${safeColor(cal.color)}"></span>
                     <div>
                         <div class="fw-bold">${escapeHtml(cal.name)}</div>
                         <div class="d-flex gap-2 align-items-center">

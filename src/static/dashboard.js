@@ -60,29 +60,29 @@ function statusBadge(ok, yesIcon = "bi-check-circle-fill", noIcon = "bi-x-circle
 function actionButtons(rec) {
     const btns = [];
     if (rec.on_local) {
-        btns.push(`<button class="btn btn-sm btn-outline-secondary btn-play-audio" data-name="${rec.name}" title="Play audio"><i class="bi bi-play-circle"></i></button>`);
+        btns.push(`<button class="btn btn-sm btn-outline-secondary btn-play-audio" data-name="${escapeHtml(rec.name)}" title="Play audio"><i class="bi bi-play-circle"></i></button>`);
         if (rec.has_transcript) {
-            btns.push(`<button class="btn btn-sm btn-outline-success btn-view-transcript" data-name="${rec.name}" title="View transcript"><i class="bi bi-file-text"></i></button>`);
+            btns.push(`<button class="btn btn-sm btn-outline-success btn-view-transcript" data-name="${escapeHtml(rec.name)}" title="View transcript"><i class="bi bi-file-text"></i></button>`);
             if (rec.has_summary) {
-                    btns.push(`<button class="btn btn-sm btn-outline-info btn-view-summary" data-name="${rec.name}" title="View summaries"><i class="bi bi-journal-text"></i></button>`);
+                    btns.push(`<button class="btn btn-sm btn-outline-info btn-view-summary" data-name="${escapeHtml(rec.name)}" title="View summaries"><i class="bi bi-journal-text"></i></button>`);
             }
-            btns.push(`<button class="btn btn-sm btn-outline-warning btn-summarize" data-name="${rec.name}" title="Summarize"><i class="bi bi-stars"></i></button>`);
+            btns.push(`<button class="btn btn-sm btn-outline-warning btn-summarize" data-name="${escapeHtml(rec.name)}" title="Summarize"><i class="bi bi-stars"></i></button>`);
         } else {
             btns.push(`<div class="btn-group btn-group-sm transcribe-split" style="position:relative">
-                <button class="btn btn-outline-primary btn-transcribe" data-name="${rec.name}" data-engine="gemini" title="Transcribe with Gemini"><i class="bi bi-mic"></i></button>
-                <button type="button" class="btn btn-outline-primary btn-transcribe-toggle" data-name="${rec.name}" title="Choose engine" style="padding-left:3px;padding-right:3px;border-left:0"><i class="bi bi-caret-down-fill" style="font-size:.55em"></i></button>
+                <button class="btn btn-outline-primary btn-transcribe" data-name="${escapeHtml(rec.name)}" data-engine="gemini" title="Transcribe with Gemini"><i class="bi bi-mic"></i></button>
+                <button type="button" class="btn btn-outline-primary btn-transcribe-toggle" data-name="${escapeHtml(rec.name)}" title="Choose engine" style="padding-left:3px;padding-right:3px;border-left:0"><i class="bi bi-caret-down-fill" style="font-size:.55em"></i></button>
                 <div class="transcribe-engine-menu d-none" style="position:absolute;top:100%;right:0;z-index:1050;min-width:160px;background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:.375rem;box-shadow:0 .5rem 1rem rgba(0,0,0,.15);margin-top:2px">
-                    <a href="#" class="btn-transcribe-engine d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-body" data-name="${rec.name}" data-engine="gemini" style="font-size:.85rem"><i class="bi bi-cloud"></i> Gemini</a>
-                    <a href="#" class="btn-transcribe-engine d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-body" data-name="${rec.name}" data-engine="whisper" style="font-size:.85rem;border-top:1px solid var(--bs-border-color)"><i class="bi bi-pc-display"></i> Whisper (local)</a>
+                    <a href="#" class="btn-transcribe-engine d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-body" data-name="${escapeHtml(rec.name)}" data-engine="gemini" style="font-size:.85rem"><i class="bi bi-cloud"></i> Gemini</a>
+                    <a href="#" class="btn-transcribe-engine d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-body" data-name="${escapeHtml(rec.name)}" data-engine="whisper" style="font-size:.85rem;border-top:1px solid var(--bs-border-color)"><i class="bi bi-pc-display"></i> Whisper (local)</a>
                 </div>
             </div>`);
         }
     }
     if (rec.in_db) {
-        btns.push(`<button class="btn btn-sm btn-outline-primary btn-move-recording" data-name="${rec.name}" title="Move to folder"><i class="bi bi-folder-symlink"></i></button>`);
+        btns.push(`<button class="btn btn-sm btn-outline-primary btn-move-recording" data-name="${escapeHtml(rec.name)}" title="Move to folder"><i class="bi bi-folder-symlink"></i></button>`);
     }
     if (rec.on_device || rec.on_local || rec.in_db) {
-        btns.push(`<button class="btn btn-sm btn-outline-danger btn-delete-recording" data-name="${rec.name}" data-on-device="${rec.on_device}" data-on-local="${rec.on_local}" data-in-db="${rec.in_db}" title="Delete recording…"><i class="bi bi-trash3"></i></button>`);
+        btns.push(`<button class="btn btn-sm btn-outline-danger btn-delete-recording" data-name="${escapeHtml(rec.name)}" data-on-device="${rec.on_device}" data-on-local="${rec.on_local}" data-in-db="${rec.in_db}" title="Delete recording…"><i class="bi bi-trash3"></i></button>`);
     }
     return btns.join(" ") || '<span class="text-muted">-</span>';
 }
@@ -90,7 +90,7 @@ function actionButtons(rec) {
 function renderTags(tags) {
     if (!tags || tags.length === 0) return '<span class="text-muted">-</span>';
     return tags
-        .map(t => `<span class="badge bg-secondary bg-opacity-25 text-body me-1 mb-1">${t}</span>`)
+        .map(t => `<span class="badge bg-secondary bg-opacity-25 text-body me-1 mb-1">${escapeHtml(t)}</span>`)
         .join("");
 }
 
@@ -111,19 +111,20 @@ function fileTypeBadge(ext) {
 
 function renderRow(rec) {
     const dateStr = rec.date && rec.time ? `${rec.date} ${rec.time}` : (rec.date || "-");
+    const safeName = escapeHtml(rec.name);
     const dateCell = rec.in_db
-        ? `<span class="editable-date" role="button" data-name="${rec.name}" data-recorded-at="${rec.recorded_at || ""}" title="Click to edit date/time">${dateStr} <i class="bi bi-pencil-square small text-muted"></i></span>`
-        : dateStr;
+        ? `<span class="editable-date" role="button" data-name="${safeName}" data-recorded-at="${escapeHtml(rec.recorded_at || "")}" title="Click to edit date/time">${escapeHtml(dateStr)} <i class="bi bi-pencil-square small text-muted"></i></span>`
+        : escapeHtml(dateStr);
     let titleStr;
     if (rec.db_title && rec.notion_url) {
-        titleStr = `<a href="${rec.notion_url}" target="_blank" rel="noopener" class="text-decoration-none" title="Open in Notion">${rec.db_title} <i class="bi bi-box-arrow-up-right small text-muted"></i></a>`;
+        titleStr = `<a href="${escapeHtml(rec.notion_url)}" target="_blank" rel="noopener" class="text-decoration-none" title="Open in Notion">${escapeHtml(rec.db_title)} <i class="bi bi-box-arrow-up-right small text-muted"></i></a>`;
     } else {
-        titleStr = rec.db_title || '<span class="text-muted">-</span>';
+        titleStr = rec.db_title ? escapeHtml(rec.db_title) : '<span class="text-muted">-</span>';
     }
     const titleCell = rec.summary_count > 1 ? `${titleStr} <span class="badge bg-info-subtle text-info-emphasis ms-1">v${rec.summary_count}</span>` : titleStr;
     return `<tr>
-        <td class="text-center"><input type="checkbox" class="rec-checkbox" data-name="${rec.name}" ${!rec.in_db ? "disabled title=\"Not in DB\"" : ""}></td>
-        <td class="fw-semibold">${rec.name}</td>
+        <td class="text-center"><input type="checkbox" class="rec-checkbox" data-name="${escapeHtml(rec.name)}" ${!rec.in_db ? "disabled title=\"Not in DB\"" : ""}></td>
+        <td class="fw-semibold">${safeName}</td>
         <td>${dateCell}</td>
         <td>${formatDuration(rec.duration)}</td>
         <td>${formatSize(rec.size)}</td>
@@ -280,15 +281,15 @@ function renderFolderTreeNode(node, recordings, level = 0) {
     const icon = isRoot ? "bi-collection" : (isActive ? "bi-folder2-open" : "bi-folder");
     const indent = level > 0 ? `padding-left: ${level * 1}rem` : "";
 
-    let html = `<div class="folder-tree-item ${isActive ? 'active' : ''}" data-folder-path="${node.path}" style="${indent}">
+    let html = `<div class="folder-tree-item ${isActive ? 'active' : ''}" data-folder-path="${escapeHtml(node.path)}" style="${indent}">
         <i class="bi ${icon} folder-icon"></i>
-        <span class="folder-name" title="${node.path || 'All recordings'}">${isRoot ? 'All' : node.name}</span>
+        <span class="folder-name" title="${escapeHtml(node.path || 'All recordings')}">${isRoot ? 'All' : escapeHtml(node.name)}</span>
         <span class="folder-count">${count}</span>`;
 
     if (!isRoot && !isRootDir) {
         html += `<span class="folder-actions">
-            <button class="btn btn-rename-folder" data-folder-path="${node.path}" title="Rename"><i class="bi bi-pencil"></i></button>
-            <button class="btn btn-delete-folder" data-folder-path="${node.path}" title="Delete"><i class="bi bi-trash3"></i></button>
+            <button class="btn btn-rename-folder" data-folder-path="${escapeHtml(node.path)}" title="Rename"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-delete-folder" data-folder-path="${escapeHtml(node.path)}" title="Delete"><i class="bi bi-trash3"></i></button>
         </span>`;
     }
     html += `</div>`;
@@ -335,9 +336,9 @@ function renderBreadcrumb(folderPath) {
     for (let i = 0; i < parts.length; i++) {
         built += "/" + parts[i];
         if (i === parts.length - 1) {
-            html += ` / <strong>${parts[i]}</strong>`;
+            html += ` / <strong>${escapeHtml(parts[i])}</strong>`;
         } else {
-            html += ` / <span class="breadcrumb-part" data-folder-path="${built}">${parts[i]}</span>`;
+            html += ` / <span class="breadcrumb-part" data-folder-path="${escapeHtml(built)}">${escapeHtml(parts[i])}</span>`;
         }
     }
     el.innerHTML = html;
