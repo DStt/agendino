@@ -67,7 +67,3 @@ Browse the full documentation at **[docs/index.md](docs/index.md)**.
 ```bash
 pytest
 ```
-
-## License
-
-This project is for personal use.
