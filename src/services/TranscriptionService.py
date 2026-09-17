@@ -30,12 +30,21 @@ MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
 
 class TranscriptionService:
-    def __init__(self, api_key: str, model: str):
-        self._client = genai.Client(api_key=api_key)
-        self._model = model
+    def __init__(self, api_key: str | None = None, model: str | None = None):
+        # Only build a client when a key is present so a DeepSeek-only setup can
+        # still construct the dashboard controller (the client is lazily unused).
+        self._client = genai.Client(api_key=api_key) if api_key else None
+        self._model = model or MODEL
+
+    @property
+    def is_configured(self) -> bool:
+        return self._client is not None
 
     def transcribe(self, audio_path: str, mime_type: str = "audio/mpeg") -> str:
         """Upload an audio file to Gemini and return the transcription text."""
+
+        if not self._client:
+            raise ValueError("Gemini API key is not configured (set GEMINI_API_KEY)")
 
         path = Path(audio_path)
         if not path.exists():
@@ -49,7 +58,7 @@ class TranscriptionService:
         logger.info("Uploaded (%s). Transcribing…", uploaded.name)
 
         response = self._client.models.generate_content(
-            model=MODEL,
+            model=self._model,
             contents=[uploaded, TRANSCRIPTION_PROMPT],
         )
         return response.text

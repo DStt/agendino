@@ -16,10 +16,13 @@ class VectorStoreRepository:
             name="summaries",
             metadata={"hnsw:space": "cosine"},
         )
-        self._genai_client = genai.Client(api_key=api_key)
+        # Optional client: a missing Gemini key must not break app startup.
+        self._genai_client = genai.Client(api_key=api_key) if api_key else None
         self._model = model
 
     def _embed(self, texts: list[str]) -> list[list[float]]:
+        if not self._genai_client:
+            raise ValueError("Gemini API key is not configured (set GEMINI_API_KEY)")
         result = self._genai_client.models.embed_content(
             model=self._model,
             contents=texts,
