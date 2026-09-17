@@ -26,7 +26,7 @@ Output format:
 [00:15] Speaker 2: ...
 """
 
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
 
 class TranscriptionService:

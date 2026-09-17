@@ -60,8 +60,8 @@ Create a `.env` file in the project root:
 GEMINI_API_KEY=your-gemini-api-key
 
 # Optional - Gemini model names (defaults shown)
-GEMINI_MODEL=gemini-2.5-flash
-GEMINI_EMBEDDING_MODEL=text-embedding-001
+GEMINI_MODEL=gemini-3.8-flash
+GEMINI_EMBEDDING_MODEL=gemini-embedding-2
 
 # Optional - Notion integration
 NOTION_API_KEY=your-notion-integration-token
