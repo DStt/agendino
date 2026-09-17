@@ -465,9 +465,7 @@ class TestDashboardControllerUploadRecording:
         assert result["name"] == "2026Mar27-094938-Wip01"
         assert result["file_extension"] == "hda"
         assert result["db_id"] == 42
-        mock_services["local_repo"].save.assert_called_once_with(
-            "2026Mar27-094938-Wip01.hda", b"audio-bytes"
-        )
+        mock_services["local_repo"].save.assert_called_once_with("2026Mar27-094938-Wip01.hda", b"audio-bytes")
         # The existing DB record must be preserved untouched.
         mock_services["sqlite_db"].insert_recording.assert_not_called()
         mock_services["sqlite_db"].update_recording.assert_not_called()
@@ -483,9 +481,7 @@ class TestDashboardControllerUploadRecording:
 
         assert result["ok"] is True
         assert result["file_extension"] == "mp3"
-        mock_services["local_repo"].save.assert_called_once_with(
-            "2026Mar27-094938-Wip01.hda", b"audio-bytes"
-        )
+        mock_services["local_repo"].save.assert_called_once_with("2026Mar27-094938-Wip01.hda", b"audio-bytes")
         mock_services["sqlite_db"].insert_recording.assert_not_called()
 
     def test_neither_exists_performs_new_upload(self, mock_services):
@@ -502,9 +498,7 @@ class TestDashboardControllerUploadRecording:
         assert result["name"] == "2026Mar27-094938-Wip01"
         assert result["file_extension"] == "hda"
         assert "restored" not in result
-        mock_services["local_repo"].save.assert_called_once_with(
-            "2026Mar27-094938-Wip01.hda", b"audio-bytes"
-        )
+        mock_services["local_repo"].save.assert_called_once_with("2026Mar27-094938-Wip01.hda", b"audio-bytes")
         mock_services["sqlite_db"].insert_recording.assert_called_once()
         inserted = mock_services["sqlite_db"].insert_recording.call_args[0][0]
         assert inserted.name == "2026Mar27-094938-Wip01"
