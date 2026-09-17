@@ -1,4 +1,5 @@
 import logging
+import time
 
 import httpx
 
@@ -9,6 +10,8 @@ DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 # deepseek-flash / deepseek-v4-pro support up to 384K output tokens.
 DEFAULT_DEEPSEEK_MAX_TOKENS = 32768
 MAX_DEEPSEEK_TOKENS = 393216
+# Transient statuses worth retrying with exponential backoff.
+RETRYABLE_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
 
 
 class DeepSeekService:
@@ -103,22 +106,7 @@ class DeepSeekService:
             self._thinking or "default",
         )
 
-        try:
-            with httpx.Client(timeout=self._timeout) as client:
-                response = client.post(url, headers=headers, json=payload)
-                response.raise_for_status()
-                data = response.json()
-        except httpx.HTTPStatusError as e:
-            error_body = e.response.text if hasattr(e, "response") else str(e)
-            logger.error(
-                "DeepSeek API HTTP error %s: %s", e.response.status_code if hasattr(e, "response") else "", error_body
-            )
-            raise RuntimeError(
-                f"DeepSeek API error ({e.response.status_code if hasattr(e, 'response') else 'unknown'}): {error_body}"
-            ) from e
-        except Exception as e:
-            logger.error("DeepSeek request failed: %s", e)
-            raise
+        data = self._post_with_retries(url, headers, payload)
 
         choices = data.get("choices", [])
         if not choices:
@@ -133,3 +121,44 @@ class DeepSeekService:
             logger.warning("DeepSeek response was truncated (finish_reason=length)")
 
         return content, is_truncated
+
+    def _post_with_retries(
+        self,
+        url: str,
+        headers: dict,
+        payload: dict,
+        attempts: int = 3,
+        base_delay: float = 0.75,
+    ) -> dict:
+        """POST with exponential backoff for transient failures."""
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                with httpx.Client(timeout=self._timeout) as client:
+                    response = client.post(url, headers=headers, json=payload)
+                    response.raise_for_status()
+                    return response.json()
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code if hasattr(e, "response") else 0
+                error_body = e.response.text if hasattr(e, "response") else str(e)
+                if status in RETRYABLE_STATUS_CODES and attempt < attempts:
+                    logger.warning("DeepSeek API %s (attempt %d/%d); retrying", status, attempt, attempts)
+                    time.sleep(base_delay * (2 ** (attempt - 1)))
+                    last_error = e
+                    continue
+                logger.error("DeepSeek API HTTP error %s: %s", status, error_body)
+                status_label = status if status else "unknown"
+                raise RuntimeError(f"DeepSeek API error ({status_label}): {error_body}") from e
+            except (httpx.TimeoutException, httpx.TransportError) as e:
+                if attempt < attempts:
+                    logger.warning("DeepSeek request failed (attempt %d/%d): %s; retrying", attempt, attempts, e)
+                    time.sleep(base_delay * (2 ** (attempt - 1)))
+                    last_error = e
+                    continue
+                logger.error("DeepSeek request failed: %s", e)
+                raise
+            except Exception as e:
+                logger.error("DeepSeek request failed: %s", e)
+                raise
+
+        raise RuntimeError(f"DeepSeek request failed after {attempts} attempts: {last_error}")

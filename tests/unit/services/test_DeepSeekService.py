@@ -171,3 +171,47 @@ class TestDeepSeekServiceResponses:
             service = DeepSeekService(api_key="sk-test")
             with pytest.raises(RuntimeError, match="empty choices"):
                 service.generate_chat(user_content="x")
+
+
+def _sequenced_client(responses):
+    """httpx.Client mock whose post() returns a different response per call."""
+    client = MagicMock()
+    client.__enter__.return_value = client
+    client.__exit__.return_value = False
+    built = []
+    for json_data, raise_exc in responses:
+        resp = MagicMock()
+        resp.json.return_value = json_data
+        if raise_exc is not None:
+            resp.raise_for_status.side_effect = raise_exc
+        else:
+            resp.raise_for_status.return_value = None
+        built.append(resp)
+    client.post.side_effect = built
+    return client
+
+
+class TestDeepSeekServiceRetries:
+    @staticmethod
+    def _error(status):
+        request = httpx.Request("POST", "https://api.deepseek.com/chat/completions")
+        response = httpx.Response(status, request=request, text=f"status {status}")
+        return httpx.HTTPStatusError(f"status {status}", request=request, response=response)
+
+    def test_retries_transient_then_succeeds(self, monkeypatch):
+        monkeypatch.setattr("services.DeepSeekService.time.sleep", lambda *_: None)
+        client = _sequenced_client([({}, self._error(503)), (_completion("ok"), None)])
+        with patch("services.DeepSeekService.httpx.Client", return_value=client):
+            service = DeepSeekService(api_key="sk-test")
+            content, _ = service.generate_chat(user_content="x")
+        assert content == "ok"
+        assert client.post.call_count == 2
+
+    def test_gives_up_after_max_retries(self, monkeypatch):
+        monkeypatch.setattr("services.DeepSeekService.time.sleep", lambda *_: None)
+        client = _sequenced_client([({}, self._error(503))] * 3)
+        with patch("services.DeepSeekService.httpx.Client", return_value=client):
+            service = DeepSeekService(api_key="sk-test")
+            with pytest.raises(RuntimeError, match="503"):
+                service.generate_chat(user_content="x")
+        assert client.post.call_count == 3
