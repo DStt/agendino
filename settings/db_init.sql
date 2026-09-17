@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS recording
     folder          TEXT    NOT NULL DEFAULT '/'
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_recording_name_unique ON recording (name);
+CREATE INDEX IF NOT EXISTS idx_recording_folder ON recording (folder);
+
 CREATE TABLE IF NOT EXISTS summary
 (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,

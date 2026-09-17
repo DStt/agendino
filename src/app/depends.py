@@ -1,4 +1,6 @@
+import logging
 import os
+from functools import lru_cache
 
 from dotenv import load_dotenv
 
@@ -29,6 +31,8 @@ from services.WhisperTranscriptionService import WhisperTranscriptionService
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 config = {}
 
 
@@ -46,6 +50,41 @@ def get_config():
     return config
 
 
+def validate_config() -> list[str]:
+    """Log the effective configuration and return human-readable warnings.
+
+    This is intentionally non-fatal: a missing Gemini key must not stop a
+    DeepSeek-only deployment from starting (see the optional clients below).
+    """
+    cfg = get_config()
+    gemini = bool(cfg.get("GEMINI_API_KEY"))
+    deepseek = bool(cfg.get("DEEPSEEK_API_KEY"))
+    provider = get_default_ai_provider()
+    warnings: list[str] = []
+
+    if not gemini and not deepseek:
+        warnings.append("No AI provider configured: set GEMINI_API_KEY and/or DEEPSEEK_API_KEY.")
+    if provider == "gemini" and not gemini:
+        warnings.append("Default provider is 'gemini' but GEMINI_API_KEY is missing.")
+    if provider == "deepseek" and not deepseek:
+        warnings.append("Default provider is 'deepseek' but DEEPSEEK_API_KEY is missing.")
+    if not gemini:
+        warnings.append(
+            "GEMINI_API_KEY is missing: transcription, embeddings and knowledge-base loading are disabled."
+        )
+
+    logger.info(
+        "Configuration: provider=%s gemini=%s deepseek=%s auth_enabled=%s",
+        provider,
+        "configured" if gemini else "missing",
+        "configured" if deepseek else "missing",
+        is_auth_enabled(),
+    )
+    for warning in warnings:
+        logger.warning("Configuration: %s", warning)
+    return warnings
+
+
 def get_root_path() -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../")
 
@@ -54,6 +93,7 @@ def get_template_path() -> str:
     return os.path.join(get_root_path(), "src/templates")
 
 
+@lru_cache(maxsize=None)
 def get_sqlite_db_repository() -> SqliteDBRepository:
     _config = get_config()
     return SqliteDBRepository(
@@ -63,6 +103,7 @@ def get_sqlite_db_repository() -> SqliteDBRepository:
     )
 
 
+@lru_cache(maxsize=None)
 def get_local_recordings_repository() -> LocalRecordingsRepository:
     return LocalRecordingsRepository(local_recordings_path=os.path.join(get_root_path(), "local_recordings"))
 
@@ -140,6 +181,7 @@ def get_transcription_service() -> TranscriptionService:
     )
 
 
+@lru_cache(maxsize=None)
 def get_whisper_transcription_service() -> WhisperTranscriptionService:
     _config = get_config()
     return WhisperTranscriptionService(
@@ -169,10 +211,12 @@ def get_task_generation_service() -> TaskGenerationService:
     )
 
 
+@lru_cache(maxsize=None)
 def get_system_prompts_repository() -> SystemPromptsRepository:
     return SystemPromptsRepository(prompts_path=os.path.join(get_root_path(), "system_prompts"))
 
 
+@lru_cache(maxsize=None)
 def get_notion_service() -> NotionService:
     _config = get_config()
     return NotionService(
@@ -237,6 +281,7 @@ def get_proactor_controller() -> ProactorController:
     )
 
 
+@lru_cache(maxsize=None)
 def get_vector_store_repository() -> VectorStoreRepository:
     _config = get_config()
     return VectorStoreRepository(

@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sqlite3
 
@@ -18,9 +19,11 @@ class SqliteDBRepository:
         self._ensure_recording_columns()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA busy_timeout = 30000")
+        conn.execute("PRAGMA journal_mode = WAL")
         return conn
 
     def _initialize_db(self, init_sql_script: str) -> None:
@@ -50,6 +53,13 @@ class SqliteDBRepository:
             except Exception:
                 conn.execute("ALTER TABLE recording ADD COLUMN folder TEXT NOT NULL DEFAULT '/'")
                 conn.commit()
+            # Enforce one DB row per recording name (best effort: existing DBs with
+            # duplicates will simply keep working until they are cleaned up).
+            try:
+                conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_recording_name_unique ON recording (name)")
+                conn.commit()
+            except Exception as e:
+                logging.warning("Could not create unique recording name index: %s", e)
         finally:
             conn.close()
 
@@ -347,6 +357,20 @@ class SqliteDBRepository:
                 ) m ON m.recording_id = s.recording_id AND m.max_version = s.version
                 """).fetchall()
             return {row["recording_name"]: DBSummary.from_dict(row) for row in rows}
+        finally:
+            conn.close()
+
+    def get_summary_counts_map(self) -> dict[str, int]:
+        """Return {recording_name: summary_count} in a single query (avoids N+1)."""
+        conn = self._connect()
+        try:
+            rows = conn.execute("""
+                SELECT r.name AS recording_name, COUNT(s.id) AS summary_count
+                FROM recording r
+                JOIN summary s ON s.recording_id = r.id
+                GROUP BY r.id
+                """).fetchall()
+            return {row["recording_name"]: int(row["summary_count"]) for row in rows}
         finally:
             conn.close()
 
