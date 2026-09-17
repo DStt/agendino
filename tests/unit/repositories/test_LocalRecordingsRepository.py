@@ -71,3 +71,25 @@ class TestLocalRecordingsRepository:
     def test_delete_nonexistent_file(self, repo):
         result = repo.delete("ghost.hda")
         assert result is False
+
+    def test_rejects_path_traversal_read(self, repo, tmp_dir):
+        outside = os.path.join(os.path.dirname(tmp_dir), "secret.mp3")
+        with open(outside, "wb") as f:
+            f.write(b"secret")
+
+        assert repo.exists("../secret.mp3") is False
+        assert repo.get_file_size("../secret.mp3") is None
+        assert repo.delete("../secret.mp3") is False
+        assert os.path.isfile(outside)
+
+    @pytest.mark.parametrize("unsafe", ["../evil.mp3", "../../etc/passwd", "/etc/passwd", "a/b.mp3", "..\\evil.mp3"])
+    def test_get_path_rejects_unsafe_names(self, repo, unsafe):
+        with pytest.raises(ValueError):
+            repo.get_path(unsafe)
+
+    def test_save_rejects_traversal(self, repo):
+        with pytest.raises(ValueError):
+            repo.save("../evil.mp3", b"x")
+
+    def test_rejects_absolute_path(self, repo):
+        assert repo.exists("/etc/passwd") is False
