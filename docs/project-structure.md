@@ -12,6 +12,7 @@ agendino/
 │   │   ├── router.py                      # Top-level router (API + web)
 │   │   ├── depends.py                     # Dependency injection / configuration
 │   │   ├── auth_middleware.py             # Session & IP-ban middleware
+│   │   ├── client_ip.py                   # Proxy-aware client IP resolution
 │   │   ├── api/endpoints/
 │   │   │   ├── auth.py                    # Login / logout endpoints
 │   │   │   ├── dashboard.py               # Recording management endpoints
@@ -52,6 +53,8 @@ agendino/
 │   │   ├── ProactorService.py             # Schedule overlap/gap analysis
 │   │   └── NotionService.py               # Notion API integration
 │   ├── static/                            # CSS & JS assets
+│   │   ├── sanitize.js                    # Shared escaping / HTML sanitization
+│   │   └── vendor/                        # Self-hosted third-party JS (DOMPurify, marked, vis-network)
 │   └── templates/                         # Jinja2 HTML templates
 ├── docs/                                  # Documentation (you are here)
 ├── settings/
@@ -63,6 +66,9 @@ agendino/
 ├── tests/                                 # Unit & integration tests
 ├── requirements.txt
 ├── requirements-dev.txt
+├── run.py                                 # Repo-root entrypoint (adds src/ to sys.path)
+├── Makefile                               # install / dev / run / test / lint targets
+├── Dockerfile                             # Container image
 └── pyproject.toml
 ```
 

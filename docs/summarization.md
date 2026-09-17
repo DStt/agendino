@@ -1,6 +1,6 @@
 # Summarization
 
-Generate structured AI summaries from transcripts using Google Gemini with customizable system prompts.
+Generate structured AI summaries from transcripts using Google Gemini or DeepSeek with customizable system prompts.
 
 ![Summarization](screenshots/summarization.png)
 
@@ -8,13 +8,13 @@ Generate structured AI summaries from transcripts using Google Gemini with custo
 
 ## Overview
 
-Once a recording has been transcribed, you can generate a structured summary using Gemini. Summaries include a **title**, **tags**, and a **full markdown body**. You can create multiple summary versions per recording using different system prompts.
+Once a recording has been transcribed, you can generate a structured summary using the selected AI provider (Gemini or DeepSeek; see [AI Providers](ai-providers.md)). Summaries include a **title**, **tags**, and a **full markdown body**. You can create multiple summary versions per recording using different system prompts.
 
 ## How It Works
 
 1. Make sure the recording has been transcribed first.
 2. Click **Summarize** and choose a **system prompt** from the available categories (e.g. `Generale / SintesiAdattiva`, `IT&Engineering / VerbaleIT`).
-3. Gemini generates a structured JSON response containing:
+3. The selected provider generates a structured JSON response containing:
    - **Title** - a concise summary title.
    - **Tags** - relevant keywords for categorization.
    - **Summary** - full markdown content with sections, bullet points, and structure defined by the prompt.
@@ -41,4 +41,4 @@ Summaries are shaped by the system prompt you choose. See [Custom System Prompts
 
 ---
 
-**Related:** [Transcription](transcription.md) · [Task Generation](task-generation.md) · [Custom System Prompts](custom-system-prompts.md)
+**Related:** [AI Providers](ai-providers.md) · [Transcription](transcription.md) · [Task Generation](task-generation.md) · [Custom System Prompts](custom-system-prompts.md)

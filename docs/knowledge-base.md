@@ -8,7 +8,7 @@ Retrieval-Augmented Generation (RAG) for searching and querying your meeting kno
 
 ## Overview
 
-The Knowledge page lets you load all your summaries into a local vector store (ChromaDB with Gemini embeddings), then search or ask natural-language questions across your entire meeting knowledge base. It also includes an interactive mind map for visualizing connections between summaries.
+The Knowledge page lets you load all your summaries into a local vector store (ChromaDB with Gemini embeddings), then search or ask natural-language questions across your entire meeting knowledge base. It also includes an interactive mind map for visualizing connections between summaries. Answers and mind maps can be generated with Gemini or DeepSeek; embeddings always require a `GEMINI_API_KEY`.
 
 ## Setup
 
@@ -30,7 +30,7 @@ Use **Ask** to pose natural-language questions:
 
 1. Type your question (e.g. "What decisions were made about the migration timeline?").
 2. Relevant summary chunks are retrieved from the vector store.
-3. Gemini answers based on the retrieved context.
+3. The selected provider (Gemini or DeepSeek) answers based on the retrieved context.
 4. The response includes **source citations** with links back to the original summaries.
 
 ## Filtering
@@ -57,7 +57,7 @@ Visualize connections across summaries as an interactive graph.
 
 ### AI-Generated Mode
 
-- Gemini analyzes all summaries and produces a **hierarchical map**:
+- The selected provider (Gemini or DeepSeek) analyzes all summaries and produces a **hierarchical map**:
   - Central topic
   - 3–7 thematic branches
   - Key insights as leaf nodes (with source summary IDs)
@@ -65,4 +65,4 @@ Visualize connections across summaries as an interactive graph.
 
 ---
 
-**Related:** [Summarization](summarization.md) · [Daily Recap](daily-recap.md)
+**Related:** [AI Providers](ai-providers.md) · [Summarization](summarization.md) · [Daily Recap](daily-recap.md)

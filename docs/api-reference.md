@@ -4,6 +4,12 @@ Full list of REST endpoints. Interactive Swagger UI is available at `http://127.
 
 ---
 
+## System
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Liveness probe (public, even when auth is enabled) |
+
 ## Dashboard - `/api/dashboard`
 
 | Method | Endpoint | Description |

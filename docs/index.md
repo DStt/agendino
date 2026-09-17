@@ -22,6 +22,7 @@ Welcome to the AgenDino docs. Use the links below to navigate to any topic.
 
 | Feature | Description |
 |---------|-------------|
+| [AI Providers](ai-providers.md) | Configure Gemini and/or DeepSeek and choose the default |
 | [Transcription](transcription.md) | Cloud (Gemini) and local (Whisper) speech-to-text |
 | [Summarization](summarization.md) | Structured AI summaries with customizable prompts |
 | [Task Generation](task-generation.md) | Extract actionable Jira-style tasks from summaries |

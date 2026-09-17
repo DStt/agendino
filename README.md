@@ -3,7 +3,7 @@
 [![Tests](https://github.com/DStt/agendino/actions/workflows/tests.yml/badge.svg)](https://github.com/DStt/agendino/actions/workflows/tests.yml)
 [![Style](https://github.com/DStt/agendino/actions/workflows/style.yml/badge.svg)](https://github.com/DStt/agendino/actions/workflows/style.yml)
 
-AgenDino is a web-based dashboard for managing, transcribing, and summarizing audio recordings from [HiDock](https://www.hidock.com/) USB devices. It uses Google Gemini and local Whisper for AI-powered transcription, summarization, task extraction, and knowledge retrieval - all from a single self-hosted interface.
+AgenDino is a web-based dashboard for managing, transcribing, and summarizing audio recordings from [HiDock](https://www.hidock.com/) USB devices. It uses Google Gemini and/or [DeepSeek](https://platform.deepseek.com/) for AI-powered summarization, task extraction, daily recaps, and knowledge retrieval, plus Google Gemini or local Whisper for transcription - all from a single self-hosted interface.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -56,7 +56,7 @@ Browse the full documentation at **[docs/index.md](docs/index.md)**.
 
 | Section | Topics |
 |---------|--------|
-| **Setup** | [Getting Started](docs/getting-started.md) |
+| **Setup** | [Getting Started](docs/getting-started.md) · [AI Providers](docs/ai-providers.md) |
 | **Core** | [HiDock](docs/hidock-integration.md) · [Recordings](docs/recording-management.md) · [Calendar](docs/calendar.md) |
 | **AI** | [Transcription](docs/transcription.md) · [Summarization](docs/summarization.md) · [Tasks](docs/task-generation.md) · [Recap](docs/daily-recap.md) · [Knowledge](docs/knowledge-base.md) · [Proactor](docs/proactive-analysis.md) |
 | **Advanced** | [Notion](docs/notion-publishing.md) · [Auth](docs/authentication.md) · [Prompts](docs/custom-system-prompts.md) |
