@@ -7,3 +7,12 @@
 /settings/sessions.json
 /settings/auth.json
 /settings/banned_ips.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.venv/
+venv/
+*.log

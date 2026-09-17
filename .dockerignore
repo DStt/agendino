@@ -1,0 +1,12 @@
+.venv
+src/.venv
+.git
+.idea
+__pycache__
+*.pyc
+.pytest_cache
+.env
+settings/*.db
+settings/vector_store
+local_recordings
+docs/screenshots

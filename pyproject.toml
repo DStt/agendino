@@ -1,5 +1,5 @@
 [tool.fastapi]
-entrypoint = "src.main:app"
+entrypoint = "run:app"
 
 [tool.black]
 line-length = 119
