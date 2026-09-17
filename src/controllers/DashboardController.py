@@ -8,7 +8,11 @@ from fastapi.templating import Jinja2Templates
 
 from models.DBRecording import DBRecording
 from models.DBTask import DBTask
-from repositories.LocalRecordingsRepository import LocalRecordingsRepository, ALLOWED_AUDIO_EXTENSIONS
+from repositories.LocalRecordingsRepository import (
+    ALLOWED_AUDIO_EXTENSIONS,
+    LocalRecordingsRepository,
+    is_safe_filename,
+)
 from repositories.SqliteDBRepository import SqliteDBRepository
 from repositories.SystemPromptsRepository import SystemPromptsRepository
 from services.DeepSeekService import DeepSeekService
@@ -128,6 +132,7 @@ class DashboardController:
         local_files = self._local_recordings_repository.get_all()
         db_recordings = self._sqlite_db_repository.get_recordings()
         latest_summaries = self._sqlite_db_repository.get_latest_summaries_map()
+        summary_counts = self._sqlite_db_repository.get_summary_counts_map()
 
         # Map bare name → local filename (preserving actual extension)
         local_map: dict[str, str] = {}
@@ -207,7 +212,7 @@ class DashboardController:
                         db_rec.transcript is not None and len(db_rec.transcript) > 0 if db_rec else False
                     ),
                     "has_summary": latest_summary is not None,
-                    "summary_count": len(self._sqlite_db_repository.get_summaries(bare_name)) if db_rec else 0,
+                    "summary_count": summary_counts.get(bare_name, 0) if db_rec else 0,
                     "notion_url": latest_summary.notion_url if latest_summary else None,
                     "folder": db_rec.folder if db_rec else "/",
                 }
@@ -243,6 +248,9 @@ class DashboardController:
           the existing DB record untouched.
         * neither exists -> normal new upload (save file + insert DB record).
         """
+        if not is_safe_filename(filename):
+            return {"ok": False, "error": f"Invalid file name: '{filename}'"}
+
         _, ext = os.path.splitext(filename)
         ext_lower = ext.lower()
         if ext_lower not in ALLOWED_AUDIO_EXTENSIONS:
