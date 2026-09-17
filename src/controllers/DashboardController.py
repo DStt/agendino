@@ -192,7 +192,17 @@ class DashboardController:
         }
 
     def upload_recording(self, filename: str, file_data: bytes, label: str = "") -> dict:
-        """Save an uploaded audio file locally and insert a DB record."""
+        """Save an uploaded audio file locally and insert a DB record.
+
+        Existence is tracked independently on disk and in the database, so the
+        two can drift apart (e.g. a DB record whose local file was lost). The
+        three cases are handled distinctly:
+
+        * local file + DB record exist -> duplicate, reject.
+        * DB record exists, local file missing -> restore the file only and keep
+          the existing DB record untouched.
+        * neither exists -> normal new upload (save file + insert DB record).
+        """
         _, ext = os.path.splitext(filename)
         ext_lower = ext.lower()
         if ext_lower not in ALLOWED_AUDIO_EXTENSIONS:
@@ -202,12 +212,31 @@ class DashboardController:
         file_ext = ext_lower.lstrip(".")
         bare_name = self._bare_name(filename)
 
-        # Reject duplicates
-        if self._local_recordings_repository.exists(filename):
-            return {"ok": False, "error": f"A file named '{filename}' already exists"}
-        if self._sqlite_db_repository.get_recording_by_name(bare_name):
-            return {"ok": False, "error": f"A recording named '{bare_name}' already exists in the database"}
+        local_exists = self._local_recordings_repository.exists(filename)
+        existing_db_rec = self._sqlite_db_repository.get_recording_by_name(bare_name)
 
+        # Local file + DB record both exist: genuine duplicate.
+        if local_exists and existing_db_rec:
+            return {"ok": False, "error": f"A recording named '{bare_name}' already exists"}
+
+        # Local file exists without a DB record: never overwrite it.
+        if local_exists:
+            return {"ok": False, "error": f"A file named '{filename}' already exists"}
+
+        # DB record exists but the local file is missing: restore only the file,
+        # preserving the existing DB record (and its metadata) as-is.
+        if existing_db_rec:
+            self._local_recordings_repository.save(filename, file_data)
+            return {
+                "ok": True,
+                "name": bare_name,
+                "file_extension": existing_db_rec.file_extension or file_ext,
+                "db_id": existing_db_rec.id,
+                "restored": True,
+                "message": f"Restored local file for existing recording '{bare_name}'",
+            }
+
+        # Neither exists: normal new upload.
         # Save file to local_recordings
         self._local_recordings_repository.save(filename, file_data)
 

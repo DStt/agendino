@@ -405,6 +405,113 @@ class TestDashboardControllerListLocalRecordings:
         assert result == ["a.hda", "b.hda"]
 
 
+class TestDashboardControllerUploadRecording:
+    @staticmethod
+    def _existing_db_recording(**overrides):
+        fields = dict(
+            id=42,
+            name="2026Mar27-094938-Wip01",
+            label="Existing label",
+            duration=99,
+            created_at=datetime.now(),
+            file_extension="hda",
+        )
+        fields.update(overrides)
+        return DBRecording(**fields)
+
+    def test_unsupported_extension_rejected(self, mock_services):
+        ctrl = mock_services["controller"]
+
+        result = ctrl.upload_recording("notes.txt", b"data")
+
+        assert result["ok"] is False
+        assert "Unsupported file type" in result["error"]
+        mock_services["local_repo"].save.assert_not_called()
+        mock_services["sqlite_db"].insert_recording.assert_not_called()
+
+    def test_local_and_db_both_exist_is_duplicate(self, mock_services):
+        ctrl = mock_services["controller"]
+        mock_services["local_repo"].exists.return_value = True
+        mock_services["sqlite_db"].get_recording_by_name.return_value = self._existing_db_recording()
+
+        result = ctrl.upload_recording("2026Mar27-094938-Wip01.hda", b"data")
+
+        assert result["ok"] is False
+        assert "already exists" in result["error"]
+        mock_services["local_repo"].save.assert_not_called()
+        mock_services["sqlite_db"].insert_recording.assert_not_called()
+
+    def test_local_exists_without_db_is_duplicate(self, mock_services):
+        ctrl = mock_services["controller"]
+        mock_services["local_repo"].exists.return_value = True
+        mock_services["sqlite_db"].get_recording_by_name.return_value = None
+
+        result = ctrl.upload_recording("2026Mar27-094938-Wip01.hda", b"data")
+
+        assert result["ok"] is False
+        assert "already exists" in result["error"]
+        mock_services["local_repo"].save.assert_not_called()
+        mock_services["sqlite_db"].insert_recording.assert_not_called()
+
+    def test_db_exists_local_missing_restores_file_only(self, mock_services):
+        ctrl = mock_services["controller"]
+        mock_services["local_repo"].exists.return_value = False
+        mock_services["sqlite_db"].get_recording_by_name.return_value = self._existing_db_recording()
+
+        result = ctrl.upload_recording("2026Mar27-094938-Wip01.hda", b"audio-bytes")
+
+        assert result["ok"] is True
+        assert result["restored"] is True
+        assert result["name"] == "2026Mar27-094938-Wip01"
+        assert result["file_extension"] == "hda"
+        assert result["db_id"] == 42
+        mock_services["local_repo"].save.assert_called_once_with(
+            "2026Mar27-094938-Wip01.hda", b"audio-bytes"
+        )
+        # The existing DB record must be preserved untouched.
+        mock_services["sqlite_db"].insert_recording.assert_not_called()
+        mock_services["sqlite_db"].update_recording.assert_not_called()
+
+    def test_restore_preserves_db_file_extension(self, mock_services):
+        ctrl = mock_services["controller"]
+        mock_services["local_repo"].exists.return_value = False
+        mock_services["sqlite_db"].get_recording_by_name.return_value = self._existing_db_recording(
+            file_extension="mp3"
+        )
+
+        result = ctrl.upload_recording("2026Mar27-094938-Wip01.hda", b"audio-bytes")
+
+        assert result["ok"] is True
+        assert result["file_extension"] == "mp3"
+        mock_services["local_repo"].save.assert_called_once_with(
+            "2026Mar27-094938-Wip01.hda", b"audio-bytes"
+        )
+        mock_services["sqlite_db"].insert_recording.assert_not_called()
+
+    def test_neither_exists_performs_new_upload(self, mock_services):
+        ctrl = mock_services["controller"]
+        mock_services["local_repo"].exists.return_value = False
+        mock_services["sqlite_db"].get_recording_by_name.return_value = None
+        mock_services["local_repo"].get_path.return_value = "/tmp/2026Mar27-094938-Wip01.hda"
+        mock_services["sqlite_db"].insert_recording.return_value = 7
+
+        result = ctrl.upload_recording("2026Mar27-094938-Wip01.hda", b"audio-bytes", label="My label")
+
+        assert result["ok"] is True
+        assert result["db_id"] == 7
+        assert result["name"] == "2026Mar27-094938-Wip01"
+        assert result["file_extension"] == "hda"
+        assert "restored" not in result
+        mock_services["local_repo"].save.assert_called_once_with(
+            "2026Mar27-094938-Wip01.hda", b"audio-bytes"
+        )
+        mock_services["sqlite_db"].insert_recording.assert_called_once()
+        inserted = mock_services["sqlite_db"].insert_recording.call_args[0][0]
+        assert inserted.name == "2026Mar27-094938-Wip01"
+        assert inserted.label == "My label"
+        assert inserted.file_extension == "hda"
+
+
 class TestDashboardControllerDelete:
     def test_delete_local_and_db(self, mock_services):
         ctrl = mock_services["controller"]
