@@ -23,12 +23,14 @@ class CalendarController:
         daily_recap_service: DailyRecapService | None = None,
         ical_sync_service: ICalSyncService | None = None,
         auth_enabled: bool = False,
+        ai_config: dict | None = None,
     ):
         self._sqlite_db_repository = sqlite_db_repository
         self._templates = Jinja2Templates(directory=template_path)
         self._daily_recap_service = daily_recap_service
         self._ical_sync_service = ical_sync_service or ICalSyncService()
         self._auth_enabled = auth_enabled
+        self._ai_config = ai_config or {}
 
     # ─── Web ──────────────────────────────────────────────────────
 
@@ -37,7 +39,11 @@ class CalendarController:
         return self._templates.TemplateResponse(
             request=request,
             name="dashboard/calendar.html",
-            context={"active_page": "calendar", "auth_enabled": self._auth_enabled},
+            context={
+                "active_page": "calendar",
+                "auth_enabled": self._auth_enabled,
+                "ai_config": self._ai_config,
+            },
         )
 
     def _auto_sync_calendars(self):
@@ -267,9 +273,12 @@ class CalendarController:
 
     # ─── Daily Recap ──────────────────────────────────────────────
 
-    def generate_daily_recap(self, date_str: str) -> dict:
+    def generate_daily_recap(self, date_str: str, provider: str | None = None) -> dict:
         if not self._daily_recap_service:
-            return {"ok": False, "error": "Daily recap service not configured (set GEMINI_API_KEY)"}
+            return {
+                "ok": False,
+                "error": "Daily recap service not configured (set GEMINI_API_KEY or DEEPSEEK_API_KEY)",
+            }
 
         day_detail = self.get_day_detail(date_str)
         events = day_detail.get("events", [])
@@ -279,7 +288,7 @@ class CalendarController:
             return {"ok": False, "error": "No events or summaries found for this day"}
 
         try:
-            recap_data = self._daily_recap_service.generate_recap(date_str, events, summaries)
+            recap_data = self._daily_recap_service.generate_recap(date_str, events, summaries, provider=provider)
         except Exception as e:
             return {"ok": False, "error": f"Recap generation failed: {str(e)}"}
 

@@ -386,7 +386,13 @@
         hide(error);
 
         try {
-            const body = ids.length > 0 ? JSON.stringify({ summary_ids: ids }) : '{}';
+            const payload = {};
+            if (ids.length > 0) payload.summary_ids = ids;
+            if (window.AIProviders) {
+                const provider = AIProviders.selected('mindmap');
+                if (provider) payload.provider = provider;
+            }
+            const body = JSON.stringify(payload);
             const data = await api('/mindmap/generate', { method: 'POST', body });
             if (!data.ok) {
                 error.textContent = data.error || 'Failed to generate mind map';
@@ -587,6 +593,8 @@
             const ids = getActiveFilterIds();
             const payload = { query, top_k: 5 };
             if (ids) payload.summary_ids = ids;
+            const providerEl = $('rag-provider-select');
+            if (providerEl && providerEl.value) payload.provider = providerEl.value;
 
             const data = await api('/ask', {
                 method: 'POST',
@@ -697,6 +705,12 @@
 
     /* ── Event Bindings ── */
     document.addEventListener('DOMContentLoaded', () => {
+        // AI provider selectors
+        if (window.AIProviders) {
+            AIProviders.populateSelect($('rag-provider-select'));
+            AIProviders.initSplits();
+        }
+
         // Initial load
         loadStats();
         loadMindMap();

@@ -484,6 +484,7 @@ function hideSyncOverlay() {
 
 document.addEventListener("DOMContentLoaded", () => {
     loadDashboard();
+    if (window.AIProviders) AIProviders.initSplits();
 
     // ─── Folder tree click handler ──────────────────────────────
     document.addEventListener("click", (e) => {
@@ -1650,6 +1651,10 @@ document.addEventListener("DOMContentLoaded", () => {
             
             let html = `
                 <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold">AI Provider</label>
+                    <select class="form-select" id="prompt-provider-select"></select>
+                </div>
+                <div class="mb-3">
                     <label class="form-label text-muted small fw-bold">Language</label>
                     <select class="form-select" id="prompt-lang-select">
                         <option value="">Select language...</option>
@@ -1669,6 +1674,9 @@ document.addEventListener("DOMContentLoaded", () => {
             `;
             promptList.innerHTML = html;
             show(promptList);
+            if (window.AIProviders) {
+                AIProviders.populateSelect(promptList.querySelector("#prompt-provider-select"));
+            }
 
             // Add event listeners
             const langSelect = promptList.querySelector('#prompt-lang-select');
@@ -1723,6 +1731,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         e.preventDefault();
         const promptId = selectBtn.dataset.promptId;
+        const providerSelect = promptList.querySelector("#prompt-provider-select");
+        const provider = providerSelect && providerSelect.value ? providerSelect.value : null;
+        let providerLabel = "AI";
+        if (window.AIProviders) {
+            const p = AIProviders.getProvider(provider) || AIProviders.getProvider(AIProviders.getDefault());
+            if (p) providerLabel = p.name;
+        }
 
         // Disable all prompt buttons while working
         promptList.querySelectorAll(".btn-select-prompt").forEach(b => b.disabled = true);
@@ -1730,13 +1745,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         closePromptPicker();
         openSummaryModal(currentSummarizeName);
-        summaryLoading.querySelector("p").textContent = "Generating summary with Gemini AI… this may take a moment.";
+        summaryLoading.querySelector("p").textContent = `Generating summary with ${providerLabel}… this may take a moment.`;
 
         try {
             const res = await fetch(`${SUMMARIZE_URL}/${encodeURIComponent(currentSummarizeName)}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt_id: promptId }),
+                body: JSON.stringify({ prompt_id: promptId, provider: provider }),
             });
             const data = await res.json();
 
@@ -2086,9 +2101,15 @@ document.addEventListener("DOMContentLoaded", () => {
     function renderTasksList(tasks, summaryId) {
         let html = `<div class="tasks-header">
             <span class="text-muted small">${tasks.length} task(s)</span>
-            <button class="btn btn-sm btn-outline-warning btn-regenerate-tasks" data-summary-id="${summaryId}">
-                <i class="bi bi-stars me-1"></i>Regenerate
-            </button>
+            <div class="ai-split" data-ai-split="tasks-header">
+                <button type="button" class="btn btn-sm btn-outline-warning btn-regenerate-tasks" data-summary-id="${summaryId}" data-ai-main>
+                    <i class="bi bi-stars me-1"></i>Regenerate
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-warning ai-split-toggle" data-ai-toggle aria-expanded="false" title="Choose AI provider">
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="ai-split-menu d-none" data-ai-menu></div>
+            </div>
         </div>`;
         html += tasks.map(t => renderTaskCard(t)).join("");
         return html;
@@ -2102,6 +2123,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (data.ok && data.tasks && data.tasks.length > 0) {
                 tasksContent.innerHTML = renderTasksList(data.tasks, summaryId);
+                if (window.AIProviders) AIProviders.initSplits(tasksContent);
                 show(tasksContent);
                 hide(tasksEmpty);
             } else {
@@ -2115,24 +2137,30 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    async function generateTasks(summaryId) {
+    async function generateTasks(summaryId, provider) {
         show(tasksLoading);
         hide(tasksContent);
         hide(tasksEmpty);
         hide(tasksError);
-        tasksLoading.querySelector("p").textContent = "Generating tasks with AI… this may take a moment.";
+        let providerLabel = "AI";
+        if (window.AIProviders) {
+            const p = AIProviders.getProvider(provider) || AIProviders.getProvider(AIProviders.getDefault());
+            if (p) providerLabel = p.name;
+        }
+        tasksLoading.querySelector("p").textContent = `Generating tasks with ${providerLabel}… this may take a moment.`;
 
         try {
             const res = await fetch(TASKS_GENERATE_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ summary_id: summaryId }),
+                body: JSON.stringify({ summary_id: summaryId, provider: provider }),
             });
             const data = await res.json();
             hide(tasksLoading);
 
             if (data.ok && data.tasks && data.tasks.length > 0) {
                 tasksContent.innerHTML = renderTasksList(data.tasks, summaryId);
+                if (window.AIProviders) AIProviders.initSplits(tasksContent);
                 show(tasksContent);
                 hide(tasksEmpty);
             } else if (data.ok) {
@@ -2164,10 +2192,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Generate tasks from empty state button
     document.addEventListener("click", async (e) => {
-        if (e.target.closest("#tasks-generate-btn-empty")) {
+        const emptyBtn = e.target.closest("#tasks-generate-btn-empty");
+        if (emptyBtn) {
             e.preventDefault();
             if (currentTasksSummaryId) {
-                await generateTasks(currentTasksSummaryId);
+                const provider = window.AIProviders
+                    ? AIProviders.selected(emptyBtn.closest("[data-ai-split]"))
+                    : null;
+                await generateTasks(currentTasksSummaryId, provider);
             }
         }
     });
@@ -2181,7 +2213,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!summaryId) return;
 
         if (!confirm("This will replace all existing tasks for this summary. Continue?")) return;
-        await generateTasks(summaryId);
+        const provider = window.AIProviders
+            ? AIProviders.selected(regenBtn.closest("[data-ai-split]"))
+            : null;
+        await generateTasks(summaryId, provider);
     });
 
     // Toggle task status

@@ -42,7 +42,12 @@ async def ask(
     body: RAGQueryRequestDTO,
     rag_controller: RAGController = Depends(depends.get_rag_controller),
 ):
-    return rag_controller.ask(body.query, body.top_k or 5, summary_ids=body.summary_ids)
+    return rag_controller.ask(
+        body.query,
+        body.top_k or 5,
+        summary_ids=body.summary_ids,
+        provider=body.provider,
+    )
 
 
 @router.post("/mindmap")
@@ -60,7 +65,8 @@ async def generate_mind_map(
     rag_controller: RAGController = Depends(depends.get_rag_controller),
 ):
     summary_ids = body.summary_ids if body else None
-    return rag_controller.generate_mind_map(summary_ids)
+    provider = body.provider if body else None
+    return rag_controller.generate_mind_map(summary_ids, provider=provider)
 
 
 @router.post("/clear")

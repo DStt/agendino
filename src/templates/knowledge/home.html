@@ -108,13 +108,19 @@
                                     <h3 class="card-title mb-0">
                                         <i class="bi bi-diagram-3 me-1"></i> Mind Map
                                     </h3>
-                                    <div class="btn-group">
+                                    <div class="d-flex gap-2">
                                         <button class="btn btn-sm btn-outline-primary" id="btn-refresh-map" title="Refresh tag-based map">
                                             <i class="bi bi-arrow-clockwise me-1"></i>Refresh
                                         </button>
-                                        <button class="btn btn-sm btn-outline-warning" id="btn-ai-mindmap" title="Generate AI-powered mind map">
-                                            <i class="bi bi-stars me-1"></i>AI Mind Map
-                                        </button>
+                                        <div class="ai-split" data-ai-split="mindmap">
+                                            <button type="button" class="btn btn-sm btn-outline-warning" id="btn-ai-mindmap" title="Generate AI-powered mind map" data-ai-main>
+                                                <i class="bi bi-stars me-1"></i>AI Mind Map
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-warning ai-split-toggle" data-ai-toggle aria-expanded="false" title="Choose AI provider">
+                                                <i class="bi bi-chevron-down"></i>
+                                            </button>
+                                            <div class="ai-split-menu d-none" data-ai-menu></div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="card-body p-0">
@@ -138,13 +144,17 @@
                                     </h3>
                                 </div>
                                 <div class="card-body">
-                                    <div class="input-group mb-3">
-                                        <input type="text" class="form-control" id="rag-query-input"
-                                               placeholder="Ask a question about your recordings…"
-                                               aria-label="Question">
-                                        <button class="btn btn-primary" id="btn-ask">
-                                            <i class="bi bi-send me-1"></i>Ask
-                                        </button>
+                                    <div class="d-flex gap-2 mb-3">
+                                        <select class="form-select ai-provider-select" id="rag-provider-select"
+                                                aria-label="AI provider" title="AI provider"></select>
+                                        <div class="input-group flex-grow-1">
+                                            <input type="text" class="form-control" id="rag-query-input"
+                                                   placeholder="Ask a question about your recordings…"
+                                                   aria-label="Question">
+                                            <button class="btn btn-primary" id="btn-ask">
+                                                <i class="bi bi-send me-1"></i>Ask
+                                            </button>
+                                        </div>
                                     </div>
                                     <div id="rag-loading" class="text-center p-4 d-none">
                                         <div class="spinner-border text-primary" role="status"></div>

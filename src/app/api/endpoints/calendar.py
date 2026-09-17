@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app import depends
 from controllers.CalendarController import CalendarController
@@ -94,9 +94,10 @@ async def unlink_recording_from_event(
 @router.post("/recap/{date_str}")
 async def generate_daily_recap(
     date_str: str,
+    provider: str | None = Query(None),
     calendar_controller: CalendarController = Depends(depends.get_calendar_controller),
 ):
-    return calendar_controller.generate_daily_recap(date_str)
+    return calendar_controller.generate_daily_recap(date_str, provider=provider)
 
 
 @router.get("/recap/{date_str}")

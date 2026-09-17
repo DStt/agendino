@@ -570,7 +570,7 @@ function updateRecapButton(recap) {
     }
 }
 
-async function generateRecap(ds) {
+async function generateRecap(ds, provider) {
     const row = $("#recap-row");
     row.style.display = "";
     show($("#recap-loading"));
@@ -578,8 +578,17 @@ async function generateRecap(ds) {
     hide($("#recap-error"));
     $("#recap-date").textContent = ds;
 
+    let providerLabel = "AI";
+    if (window.AIProviders) {
+        const p = AIProviders.getProvider(provider) || AIProviders.getProvider(AIProviders.getDefault());
+        if (p) providerLabel = p.name;
+    }
+    const loadingP = $("#recap-loading")?.querySelector("p");
+    if (loadingP) loadingP.textContent = `Generating daily recap with ${providerLabel}…`;
+
     try {
-        const res = await fetch(`${CAL_API}/recap/${ds}`, { method: "POST" });
+        const query = provider ? `?provider=${encodeURIComponent(provider)}` : "";
+        const res = await fetch(`${CAL_API}/recap/${ds}${query}`, { method: "POST" });
         const data = await res.json();
 
         hide($("#recap-loading"));
@@ -1072,6 +1081,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const today = new Date();
     currentYear = today.getFullYear();
     currentMonth = today.getMonth() + 1;
+    if (window.AIProviders) AIProviders.initSplits();
     loadMonth(currentYear, currentMonth);
 
     // Nav buttons
@@ -1111,13 +1121,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Daily recap button (generate or regenerate)
-    $("#btn-daily-recap")?.addEventListener("click", () => {
-        if (selectedDate) generateRecap(selectedDate);
+    $("#btn-daily-recap")?.addEventListener("click", (e) => {
+        const provider = window.AIProviders
+            ? AIProviders.selected(e.currentTarget.closest("[data-ai-split]"))
+            : null;
+        if (selectedDate) generateRecap(selectedDate, provider);
     });
 
     // Regenerate recap from inline stored recap
-    $("#btn-regenerate-recap")?.addEventListener("click", () => {
-        if (selectedDate) generateRecap(selectedDate);
+    $("#btn-regenerate-recap")?.addEventListener("click", (e) => {
+        const provider = window.AIProviders
+            ? AIProviders.selected(e.currentTarget.closest("[data-ai-split]"))
+            : null;
+        if (selectedDate) generateRecap(selectedDate, provider);
     });
 
     // Delete recap from inline stored recap

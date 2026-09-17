@@ -5,6 +5,8 @@ from google import genai
 from google.genai import types
 from json_repair import repair_json
 
+from services.DeepSeekService import DeepSeekService
+
 logger = logging.getLogger(__name__)
 
 MAX_OUTPUT_TOKENS = 65536
@@ -28,12 +30,28 @@ Use the language from the instruction not the transcript to generate the summary
 
 
 class SummarizationService:
-    def __init__(self, api_key: str, model: str):
-        self._model = model
-        self._client = genai.Client(api_key=api_key)
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+        deepseek_service: DeepSeekService | None = None,
+        default_provider: str = "gemini",
+    ):
+        self._model = model or "gemini-3.8-flash"
+        self._api_key = api_key
+        self._client = genai.Client(api_key=api_key) if api_key else None
+        self._deepseek_service = deepseek_service
+        self._default_provider = default_provider
 
-    def summarize(self, transcript: str, system_prompt: str, recording_datetime: str | None = None) -> dict:
+    def summarize(
+        self,
+        transcript: str,
+        system_prompt: str,
+        recording_datetime: str | None = None,
+        provider: str | None = None,
+    ) -> dict:
         """Summarize a transcript and return structured result with title, tags, and summary."""
+        target_provider = (provider or self._default_provider).lower()
 
         # Build the enriched system instruction
         full_system_prompt = system_prompt + STRUCTURED_INSTRUCTIONS
@@ -43,6 +61,21 @@ class SummarizationService:
         if recording_datetime:
             user_content += f"Recording date/time: {recording_datetime}\n\n"
         user_content += transcript
+
+        if target_provider == "deepseek":
+            if not self._deepseek_service or not self._deepseek_service.is_configured:
+                raise ValueError("DeepSeek API key is not configured (set DEEPSEEK_API_KEY)")
+            logger.info("Generating structured summary with DeepSeek…")
+            raw, truncated = self._deepseek_service.generate_chat(
+                user_content=user_content,
+                system_prompt=full_system_prompt,
+                json_mode=True,
+            )
+            return self._parse_response(raw, truncated=truncated)
+
+        # Default to Gemini
+        if not self._client:
+            raise ValueError("Gemini API key is not configured (set GEMINI_API_KEY)")
 
         logger.info("Generating structured summary with Gemini…")
         response = self._client.models.generate_content(
@@ -70,7 +103,7 @@ class SummarizationService:
 
     @staticmethod
     def _parse_response(raw: str, truncated: bool = False) -> dict:
-        """Parse the JSON response from Gemini into title, tags, summary."""
+        """Parse the JSON response into title, tags, summary."""
 
         def _extract(data: dict) -> dict:
             title = data.get("title", "").strip()

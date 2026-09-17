@@ -11,6 +11,7 @@ from models.DBTask import DBTask
 from repositories.LocalRecordingsRepository import LocalRecordingsRepository, ALLOWED_AUDIO_EXTENSIONS
 from repositories.SqliteDBRepository import SqliteDBRepository
 from repositories.SystemPromptsRepository import SystemPromptsRepository
+from services.DeepSeekService import DeepSeekService
 from services.SummarizationService import SummarizationService
 from services.TaskGenerationService import TaskGenerationService
 from services.TranscriptionService import TranscriptionService
@@ -42,6 +43,8 @@ class DashboardController:
         publish_services: dict[str, object] | None = None,
         whisper_transcription_service: WhisperTranscriptionService | None = None,
         auth_enabled: bool = False,
+        deepseek_service: DeepSeekService | None = None,
+        default_ai_provider: str = "gemini",
     ):
         self._sqlite_db_repository = sqlite_db_repository
         self._local_recordings_repository = local_recordings_repository
@@ -53,6 +56,8 @@ class DashboardController:
         self._publish_services: dict[str, object] = publish_services or {}
         self._whisper_transcription_service = whisper_transcription_service
         self._auth_enabled = auth_enabled
+        self._deepseek_service = deepseek_service
+        self._default_ai_provider = default_ai_provider
 
     @staticmethod
     def _bare_name(name: str) -> str:
@@ -78,8 +83,43 @@ class DashboardController:
         return self._templates.TemplateResponse(
             request=request,
             name="dashboard/home.html",
-            context={"active_page": "dashboard", "auth_enabled": self._auth_enabled},
+            context={
+                "active_page": "dashboard",
+                "auth_enabled": self._auth_enabled,
+                "ai_config": self.get_ai_providers(),
+            },
         )
+
+    def get_ai_providers(self) -> dict:
+        gemini_configured = bool(getattr(self._summarization_service, "_client", None))
+
+        deepseek_service = self._deepseek_service
+        fallback = getattr(self._summarization_service, "_deepseek_service", None)
+        if deepseek_service is None and isinstance(fallback, DeepSeekService):
+            deepseek_service = fallback
+        deepseek_configured = bool(deepseek_service and deepseek_service.is_configured)
+
+        gemini_model = getattr(self._summarization_service, "_model", "gemini-3.8-flash")
+        deepseek_model = deepseek_service.model if deepseek_service else "deepseek-flash"
+
+        return {
+            "ok": True,
+            "default_provider": self._default_ai_provider,
+            "providers": [
+                {
+                    "id": "gemini",
+                    "name": "Gemini AI",
+                    "model": gemini_model,
+                    "configured": gemini_configured,
+                },
+                {
+                    "id": "deepseek",
+                    "name": "DeepSeek AI",
+                    "model": deepseek_model,
+                    "configured": deepseek_configured,
+                },
+            ],
+        }
 
     def list_local_recordings(self):
         return self._local_recordings_repository.get_all()
@@ -404,7 +444,7 @@ class DashboardController:
         prompts = self._system_prompts_repository.get_all()
         return {"ok": True, "prompts": prompts}
 
-    def summarize_recording(self, name: str, prompt_id: str) -> dict:
+    def summarize_recording(self, name: str, prompt_id: str, provider: str | None = None) -> dict:
         bare_name = self._bare_name(name)
 
         transcript = self._sqlite_db_repository.get_transcript(bare_name)
@@ -419,7 +459,7 @@ class DashboardController:
 
         try:
             result = self._summarization_service.summarize(
-                transcript, prompt_content, recording_datetime=recording_datetime
+                transcript, prompt_content, recording_datetime=recording_datetime, provider=provider
             )
         except Exception as e:
             return {"ok": False, "error": f"Summarization failed: {str(e)}"}
@@ -592,7 +632,7 @@ class DashboardController:
 
     # ─── Tasks ───────────────────────────────────────────────────
 
-    def generate_tasks(self, summary_id: int) -> dict:
+    def generate_tasks(self, summary_id: int, provider: str | None = None) -> dict:
         summary = self._sqlite_db_repository.get_summary_by_id(summary_id)
         if not summary:
             return {"ok": False, "error": f"Summary '{summary_id}' not found"}
@@ -607,6 +647,7 @@ class DashboardController:
             raw_tasks = self._task_generation_service.generate_tasks(
                 summary_text=summary.summary,
                 summary_title=summary.title,
+                provider=provider,
             )
         except Exception as e:
             return {"ok": False, "error": f"Task generation failed: {str(e)}"}

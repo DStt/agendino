@@ -5,6 +5,8 @@ from google import genai
 from google.genai import types
 from json_repair import repair_json
 
+from services.DeepSeekService import DeepSeekService
+
 logger = logging.getLogger(__name__)
 
 MIND_MAP_PROMPT = """You are a knowledge-mapping expert. Analyze the summaries and produce a
@@ -52,12 +54,22 @@ Answer:"""
 
 
 class RAGService:
-    def __init__(self, api_key, model: str):
-        self._client = genai.Client(api_key=api_key)
-        self._model = model
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+        deepseek_service: DeepSeekService | None = None,
+        default_provider: str = "gemini",
+    ):
+        self._client = genai.Client(api_key=api_key) if api_key else None
+        self._model = model or "gemini-3.8-flash"
+        self._deepseek_service = deepseek_service
+        self._default_provider = default_provider
 
-    def ask(self, question: str, context_docs: list[dict]) -> dict:
+    def ask(self, question: str, context_docs: list[dict], provider: str | None = None) -> dict:
         """RAG query: answer a question using retrieved context."""
+        target_provider = (provider or self._default_provider).lower()
+
         context_parts = []
         sources = []
         for i, doc in enumerate(context_docs):
@@ -77,6 +89,23 @@ class RAGService:
         context = "\n\n---\n\n".join(context_parts)
         prompt = RAG_PROMPT.format(context=context, question=question)
 
+        if target_provider == "deepseek":
+            if not self._deepseek_service or not self._deepseek_service.is_configured:
+                raise ValueError("DeepSeek API key is not configured (set DEEPSEEK_API_KEY)")
+            logger.info("Answering RAG query with DeepSeek…")
+            raw, _ = self._deepseek_service.generate_chat(
+                user_content=prompt,
+                json_mode=False,
+            )
+            return {
+                "answer": raw,
+                "sources": sources,
+            }
+
+        if not self._client:
+            raise ValueError("Gemini API key is not configured (set GEMINI_API_KEY)")
+
+        logger.info("Answering RAG query with Gemini…")
         response = self._client.models.generate_content(
             model=self._model,
             config=types.GenerateContentConfig(
@@ -90,8 +119,9 @@ class RAGService:
             "sources": sources,
         }
 
-    def generate_mind_map(self, summaries: list[dict]) -> dict:
-        """Generate a mind map structure from summaries using Gemini."""
+    def generate_mind_map(self, summaries: list[dict], provider: str | None = None) -> dict:
+        """Generate a mind map structure from summaries using Gemini or DeepSeek."""
+        target_provider = (provider or self._default_provider).lower()
 
         summary_texts = []
         for s in summaries:
@@ -102,6 +132,20 @@ class RAGService:
             summary_texts.append(entry)
 
         content = "Summaries:\n\n" + "\n\n---\n\n".join(summary_texts)
+
+        if target_provider == "deepseek":
+            if not self._deepseek_service or not self._deepseek_service.is_configured:
+                raise ValueError("DeepSeek API key is not configured (set DEEPSEEK_API_KEY)")
+            logger.info("Generating mind map with DeepSeek for %d summaries…", len(summaries))
+            raw, _ = self._deepseek_service.generate_chat(
+                user_content=content,
+                system_prompt=MIND_MAP_PROMPT,
+                json_mode=True,
+            )
+            return self._parse_mind_map_json(raw)
+
+        if not self._client:
+            raise ValueError("Gemini API key is not configured (set GEMINI_API_KEY)")
 
         logger.info("Generating mind map with Gemini for %d summaries…", len(summaries))
         response = self._client.models.generate_content(
@@ -115,6 +159,10 @@ class RAGService:
         )
 
         raw = response.text or ""
+        return self._parse_mind_map_json(raw)
+
+    @staticmethod
+    def _parse_mind_map_json(raw: str) -> dict:
         try:
             data = json.loads(raw)
             if isinstance(data, dict):

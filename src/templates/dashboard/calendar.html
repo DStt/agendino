@@ -86,9 +86,15 @@
                                         <button class="btn btn-sm btn-outline-primary" id="btn-add-event">
                                             <i class="bi bi-plus-lg me-1"></i>Add Event
                                         </button>
-                                        <button class="btn btn-sm btn-outline-warning" id="btn-daily-recap">
-                                            <i class="bi bi-stars me-1"></i>Daily Recap
-                                        </button>
+                                        <div class="ai-split" data-ai-split="recap">
+                                            <button type="button" class="btn btn-sm btn-outline-warning" id="btn-daily-recap" data-ai-main>
+                                                <i class="bi bi-stars me-1"></i>Daily Recap
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-warning ai-split-toggle" data-ai-toggle aria-expanded="false" title="Choose AI provider">
+                                                <i class="bi bi-chevron-down"></i>
+                                            </button>
+                                            <div class="ai-split-menu d-none" data-ai-menu></div>
+                                        </div>
                                         <button class="btn btn-sm btn-outline-secondary" id="btn-close-detail">
                                             <i class="bi bi-x-lg"></i>
                                         </button>
@@ -129,9 +135,15 @@
                                                 </h6>
                                                 <div class="d-flex gap-1">
                                                     <small class="text-muted me-2" id="recap-updated-at"></small>
-                                                    <button class="btn btn-sm btn-outline-warning" id="btn-regenerate-recap" title="Regenerate recap">
-                                                        <i class="bi bi-arrow-repeat"></i>
-                                                    </button>
+                                                    <div class="ai-split" data-ai-split="recap-stored">
+                                                        <button type="button" class="btn btn-sm btn-outline-warning" id="btn-regenerate-recap" title="Regenerate recap" data-ai-main>
+                                                            <i class="bi bi-arrow-repeat"></i>
+                                                        </button>
+                                                        <button type="button" class="btn btn-sm btn-outline-warning ai-split-toggle" data-ai-toggle aria-expanded="false" title="Choose AI provider">
+                                                            <i class="bi bi-chevron-down"></i>
+                                                        </button>
+                                                        <div class="ai-split-menu d-none" data-ai-menu></div>
+                                                    </div>
                                                     <button class="btn btn-sm btn-outline-danger" id="btn-delete-recap" title="Delete recap">
                                                         <i class="bi bi-trash3"></i>
                                                     </button>

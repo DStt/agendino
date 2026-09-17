@@ -5,6 +5,8 @@ from google import genai
 from google.genai import types
 from json_repair import repair_json
 
+from services.DeepSeekService import DeepSeekService
+
 logger = logging.getLogger(__name__)
 
 MAX_OUTPUT_TOKENS = 8192
@@ -20,7 +22,7 @@ Rules:
 4. Focus on concrete, actionable items - NOT vague goals.
 5. Use the same language as the summary.
 
-You MUST respond with a valid JSON array of task objects:
+You MUST respond with a valid JSON array of task objects, or a JSON object with a "tasks" key:
 [
   {
     "title": "Task title",
@@ -35,21 +37,81 @@ You MUST respond with a valid JSON array of task objects:
 ]
 
 If a task does not need subtasks, omit the "subtasks" field or set it to an empty array.
-Return ONLY the JSON array, no other text before or after it.
+Return ONLY the JSON array or object, no other text before or after it.
+"""
+
+DEEPSEEK_TASK_PROMPT = """\
+You are a project management assistant. Given a meeting summary, generate
+actionable tasks that could be added to a Jira board.
+
+Rules:
+1. Each task must have a clear, concise **title** (suitable as a Jira ticket title).
+2. Each task must have a **description** explaining what needs to be done.
+3. If a task is too broad or large in scope, break it into **subtasks** - each subtask also has a title and description.
+4. Focus on concrete, actionable items - NOT vague goals.
+5. Use the same language as the summary.
+
+You MUST respond with a valid JSON object containing a "tasks" array:
+{
+  "tasks": [
+    {
+      "title": "Task title",
+      "description": "What needs to be done",
+      "subtasks": [
+        {
+          "title": "Subtask title",
+          "description": "Subtask details"
+        }
+      ]
+    }
+  ]
+}
+
+If a task does not need subtasks, omit the "subtasks" field or set it to an empty array.
+Return ONLY the JSON object, no other text before or after it.
 """
 
 
 class TaskGenerationService:
-    def __init__(self, api_key: str, model: str):
-        self._client = genai.Client(api_key=api_key)
-        self._model = model
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+        deepseek_service: DeepSeekService | None = None,
+        default_provider: str = "gemini",
+    ):
+        self._client = genai.Client(api_key=api_key) if api_key else None
+        self._model = model or "gemini-3.8-flash"
+        self._deepseek_service = deepseek_service
+        self._default_provider = default_provider
 
-    def generate_tasks(self, summary_text: str, summary_title: str | None = None) -> list[dict]:
-        """Generate actionable tasks from a meeting summary using Gemini AI."""
+    def generate_tasks(
+        self,
+        summary_text: str,
+        summary_title: str | None = None,
+        provider: str | None = None,
+    ) -> list[dict]:
+        """Generate actionable tasks from a meeting summary using Gemini or DeepSeek AI."""
+        target_provider = (provider or self._default_provider).lower()
+
         user_content = ""
         if summary_title:
             user_content += f"Meeting title: {summary_title}\n\n"
         user_content += f"Summary:\n{summary_text}"
+
+        if target_provider == "deepseek":
+            if not self._deepseek_service or not self._deepseek_service.is_configured:
+                raise ValueError("DeepSeek API key is not configured (set DEEPSEEK_API_KEY)")
+            logger.info("Generating tasks from summary with DeepSeek…")
+            raw, _ = self._deepseek_service.generate_chat(
+                user_content=user_content,
+                system_prompt=DEEPSEEK_TASK_PROMPT,
+                json_mode=True,
+            )
+            return self._parse_response(raw)
+
+        if not self._client:
+            raise ValueError("Gemini API key is not configured (set GEMINI_API_KEY)")
 
         logger.info("Generating tasks from summary with Gemini…")
         response = self._client.models.generate_content(
@@ -67,7 +129,7 @@ class TaskGenerationService:
 
     @staticmethod
     def _parse_response(raw: str) -> list[dict]:
-        """Parse the JSON response from Gemini into a list of task dicts."""
+        """Parse the JSON response into a list of task dicts."""
 
         def _validate_tasks(data: list) -> list[dict]:
             tasks = []

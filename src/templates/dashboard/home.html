@@ -308,9 +308,15 @@
                 <div id="tasks-empty" class="text-center text-muted p-4 d-none">
                     <i class="bi bi-clipboard-x" style="font-size: 2.5rem;"></i>
                     <p class="mt-2">No tasks yet for this summary.</p>
-                    <button class="btn btn-sm btn-outline-primary" id="tasks-generate-btn-empty">
-                        <i class="bi bi-stars me-1"></i>Generate Tasks
-                    </button>
+                    <div class="ai-split" data-ai-split="tasks-empty">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="tasks-generate-btn-empty" data-ai-main>
+                            <i class="bi bi-stars me-1"></i>Generate Tasks
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary ai-split-toggle" data-ai-toggle aria-expanded="false" title="Choose AI provider">
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                        <div class="ai-split-menu d-none" data-ai-menu></div>
+                    </div>
                 </div>
                 <div id="tasks-error" class="alert alert-danger m-3 d-none"></div>
             </div>

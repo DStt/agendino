@@ -98,6 +98,8 @@
 
     {% block modals %}{% endblock %}
 
+    <script>window.__AI_CONFIG__ = {{ ai_config | default({}) | tojson }};</script>
+    <script src="/static/ai-providers.js"></script>
     <script src="/static/app.js"></script>
     {% block extra_js %}{% endblock %}
 </body>

@@ -82,13 +82,20 @@ async def list_system_prompts(
     return dashboard_controller.list_system_prompts()
 
 
+@router.get("/ai-providers")
+async def get_ai_providers(
+    dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
+):
+    return dashboard_controller.get_ai_providers()
+
+
 @router.post("/summarize/{name}")
 async def summarize_recording(
     name: str,
     body: SummarizeRequestDTO,
     dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
 ):
-    return dashboard_controller.summarize_recording(name, body.prompt_id)
+    return dashboard_controller.summarize_recording(name, body.prompt_id, provider=body.provider)
 
 
 @router.get("/summaries/{name}")
@@ -173,7 +180,7 @@ async def generate_tasks(
     body: GenerateTasksRequestDTO,
     dashboard_controller: DashboardController = Depends(depends.get_dashboard_controller),
 ):
-    return dashboard_controller.generate_tasks(body.summary_id)
+    return dashboard_controller.generate_tasks(body.summary_id, provider=body.provider)
 
 
 @router.get("/tasks/{summary_id}")

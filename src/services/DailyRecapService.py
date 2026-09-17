@@ -5,6 +5,8 @@ from google import genai
 from google.genai import types
 from json_repair import repair_json
 
+from services.DeepSeekService import DeepSeekService
+
 logger = logging.getLogger(__name__)
 
 MAX_OUTPUT_TOKENS = 16384
@@ -36,12 +38,28 @@ Return ONLY the JSON object, no other text before or after it.
 
 
 class DailyRecapService:
-    def __init__(self, api_key: str, model: str):
-        self._client = genai.Client(api_key=api_key)
-        self._model = model
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+        deepseek_service: DeepSeekService | None = None,
+        default_provider: str = "gemini",
+    ):
+        self._client = genai.Client(api_key=api_key) if api_key else None
+        self._model = model or "gemini-3.8-flash"
+        self._deepseek_service = deepseek_service
+        self._default_provider = default_provider
 
-    def generate_recap(self, date_str: str, events: list[dict], summaries: list[dict]) -> dict:
+    def generate_recap(
+        self,
+        date_str: str,
+        events: list[dict],
+        summaries: list[dict],
+        provider: str | None = None,
+    ) -> dict:
         """Generate a daily recap from events and summaries."""
+        target_provider = (provider or self._default_provider).lower()
+
         # Build context
         context_parts = [f"Date: {date_str}\n"]
 
@@ -65,6 +83,20 @@ class DailyRecapService:
                 context_parts.append("")
 
         user_content = "\n".join(context_parts)
+
+        if target_provider == "deepseek":
+            if not self._deepseek_service or not self._deepseek_service.is_configured:
+                raise ValueError("DeepSeek API key is not configured (set DEEPSEEK_API_KEY)")
+            logger.info("Generating daily recap for %s with DeepSeek…", date_str)
+            raw, _ = self._deepseek_service.generate_chat(
+                user_content=user_content,
+                system_prompt=DAILY_RECAP_PROMPT,
+                json_mode=True,
+            )
+            return self._parse_response(raw)
+
+        if not self._client:
+            raise ValueError("Gemini API key is not configured (set GEMINI_API_KEY)")
 
         logger.info("Generating daily recap for %s with Gemini…", date_str)
         response = self._client.models.generate_content(

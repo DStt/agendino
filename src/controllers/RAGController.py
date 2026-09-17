@@ -21,18 +21,24 @@ class RAGController:
         rag_service: RAGService,
         template_path: str,
         auth_enabled: bool = False,
+        ai_config: dict | None = None,
     ):
         self._sqlite_db_repository = sqlite_db_repository
         self._vector_store = vector_store_repository
         self._rag_service = rag_service
         self._templates = Jinja2Templates(directory=template_path)
         self._auth_enabled = auth_enabled
+        self._ai_config = ai_config or {}
 
     def home(self, request: Request):
         return self._templates.TemplateResponse(
             request=request,
             name="knowledge/home.html",
-            context={"active_page": "knowledge", "auth_enabled": self._auth_enabled},
+            context={
+                "active_page": "knowledge",
+                "auth_enabled": self._auth_enabled,
+                "ai_config": self._ai_config,
+            },
         )
 
     @staticmethod
@@ -132,7 +138,13 @@ class RAGController:
             "query": query,
         }
 
-    def ask(self, question: str, top_k: int = 5, summary_ids: list[int] | None = None) -> dict:
+    def ask(
+        self,
+        question: str,
+        top_k: int = 5,
+        summary_ids: list[int] | None = None,
+        provider: str | None = None,
+    ) -> dict:
         if self._vector_store.count() == 0:
             return {"ok": False, "error": "Vector store is empty. Load summaries first."}
 
@@ -141,7 +153,7 @@ class RAGController:
 
         # Generate answer using RAG
         try:
-            result = self._rag_service.ask(question, context_docs)
+            result = self._rag_service.ask(question, context_docs, provider=provider)
         except Exception as e:
             return {"ok": False, "error": f"RAG query failed: {str(e)}"}
 
@@ -211,8 +223,8 @@ class RAGController:
 
         return node, edges
 
-    def generate_mind_map(self, summary_ids: list[int] | None = None) -> dict:
-        """Use Gemini to generate an AI-structured mind map from summaries."""
+    def generate_mind_map(self, summary_ids: list[int] | None = None, provider: str | None = None) -> dict:
+        """Use Gemini or DeepSeek to generate an AI-structured mind map from summaries."""
         summaries_map = self._sqlite_db_repository.get_latest_summaries_map()
 
         summaries_list = []
@@ -235,7 +247,7 @@ class RAGController:
             return {"ok": False, "error": "No summaries to analyze"}
 
         try:
-            result = self._rag_service.generate_mind_map(summaries_list)
+            result = self._rag_service.generate_mind_map(summaries_list, provider=provider)
         except Exception as e:
             return {"ok": False, "error": f"Mind map generation failed: {str(e)}"}
 
