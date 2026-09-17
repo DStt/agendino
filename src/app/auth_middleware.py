@@ -4,12 +4,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 
+from app.client_ip import get_client_ip
 from services.AuthService import AuthService
 
 logger = logging.getLogger(__name__)
 
 # Paths that never require authentication
-PUBLIC_PATHS = frozenset({"/login", "/api/auth/login", "/api/auth/logout"})
+PUBLIC_PATHS = frozenset({"/login", "/api/auth/login", "/api/auth/logout", "/health"})
 PUBLIC_PREFIXES = ("/static/",)
 
 SESSION_COOKIE = "agendino_session"
@@ -24,7 +25,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         # Block banned IPs immediately
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_client_ip(request)
         if self.auth_service.is_ip_banned(client_ip):
             logger.warning("Blocked request from banned IP %s", client_ip)
             return JSONResponse({"detail": "Forbidden"}, status_code=403)
